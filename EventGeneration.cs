@@ -140,7 +140,7 @@ namespace UnlimitedEventExpansion
           }
         }
 
-        SMonitor.Log($"Premium models: {premiumInputTotal} input tokens, {premiumOutputTotal} output tokens.\nRegular models: {regularInputTotal} input tokens, {regularOutputTotal} output tokens.", LogLevel.Error);
+        // SMonitor.Log($"Premium models: {premiumInputTotal} input tokens, {premiumOutputTotal} output tokens.\nRegular models: {regularInputTotal} input tokens, {regularOutputTotal} output tokens.", LogLevel.Error);
         return ((int)(premiumInputTotal + premiumOutputTotal), (int)(regularInputTotal + regularOutputTotal));
       }
       catch (Exception ex)
@@ -165,6 +165,7 @@ namespace UnlimitedEventExpansion
       var requestBody = new Dictionary<string, object>
             {
                 { "model", EventModel },
+                { "max_output_tokens",  3000 },
                 { "input", new object[]
                     {
                         new
@@ -290,7 +291,7 @@ namespace UnlimitedEventExpansion
       // CUSTOM CHARACTERISTIC OVERRIDE
       if (!string.IsNullOrWhiteSpace(Config.OpenAIKey))
       {
-        if ( Config.CharacteristicMode == ModConfig.CharacteristicModeLong && NpcCharacteristicsLong.TryGetValue(npc.Name, out string? customCharacteristicLong) && !string.IsNullOrWhiteSpace(customCharacteristicLong))
+        if (Config.CharacteristicMode == ModConfig.CharacteristicModeLong && NpcCharacteristicsLong.TryGetValue(npc.Name, out string? customCharacteristicLong) && !string.IsNullOrWhiteSpace(customCharacteristicLong))
         {
           npcCharacteristic = customCharacteristicLong;
         }
@@ -439,13 +440,14 @@ Current time is {currentTime}, and party location is {locationName}.
 NPCs characteristic: {npcCharacteristic}
 
 Style Guidelines:
+ - NPC name must be exactly as provided, including spaces, unique identifiers, symbols, etc.
  - Dialogue should feel personal, grounded, and affectionate. It should be raw sentence as how NPC will speak, do not add emotional explanations, and must not use character '\'.
  - Questions should open opportunities for meaningful roleplay or emotional responses. For Player response, give them both ways so they can make their choice.
  - Do not include any icons, comments, or extra formatting. Stay within the limit.
 ";
 
       var user = @$"{npcTarget} is holding a party at {locationName} to celebrate his/her birthday. Player {Game1.player.Name}, {string.Join(", ", guestNames.Skip(1).Take(4))} and more are attending.
-      They are bringing {string.Join(", ", foodItems.ConvertAll(item => item.Name))} to the party, along with many gifts for {npcTarget}. {(string.IsNullOrEmpty(birthdayGiftName) ? "" : $"Player {Game1.player.Name} gift for {npcTarget} this year is {birthdayGiftName}.")}";
+      They are bringing {string.Join(", ", foodItems.ConvertAll(item => item.DisplayName))} to the party, along with many gifts for {npcTarget}. {(string.IsNullOrEmpty(birthdayGiftName) ? "" : $"Player {Game1.player.Name} gift for {npcTarget} this year is {birthdayGiftName}.")}";
       birthdayGiftName = "";
 
       var responseMessage = await RequestOpenAiResponseAsync(system, user);
@@ -473,7 +475,7 @@ Style Guidelines:
       string npcCharacteristicMinimal = string.Join(". ", npcNames.Take(5).Select(name => GetNpcCharacteristicForPrompt(name, true)));
       var system = @$"
 You are a narrative design assistant specializing in creating dialogue scenes about a campfire event between the PLAYER and a group of close friends in context of game Stardew Valley. 
-Your task is to generate dialogues for the NPC to exchange with Player during a campfire night. Output a structured JSON format. {GetPreferedEventLength()}
+Your task is to generate dialogues for the NPC to exchange with Player around the campfire. Output a structured JSON format. {GetPreferedEventLength()}
 
 Your objectives:
 - Create realistic and natural dialogues in the style of Stardew Valley 
@@ -531,6 +533,7 @@ Current time is {currentTime}, campfire location is {locationName}.
 NPC characteristic: {npcCharacteristicMinimal}
 
 Style Guidelines:
+ - NPC name must be exactly as provided, including spaces, unique identifiers, symbols, etc.
  - Dialogue should feel personal, grounded, and affectionate. It should be raw sentence as how NPC will speak, do not give emotional explanations, and must not use character '\'.
  - Questions should open opportunities for meaningful roleplay or emotional responses. For Player response, give them both ways so they can make their choice.
  - Do not include any explanations, comments, or extra formatting. Stay within the limit. Only return the structured JSON.
@@ -569,7 +572,7 @@ This is some other context you can use: {data}";
 
       int heartLevel = 0;
       if (Game1.player.friendshipData.ContainsKey(npc.Name)) heartLevel = (int)Game1.player.friendshipData[npc.Name].Points / 250;
-      string relation = heartLevel <= 6 ? "friend" : "best friend";
+      string relation = heartLevel <= 2 ? "stranger" : heartLevel <= 4 ? "acquaintance" : heartLevel <= 6 ? "close friend" : "best friend";
       bool isDating = Game1.player.friendshipData.TryGetValue(npc.Name, out Friendship friendship) && friendship.IsDating();
       bool isRoommate = friendship != null && friendship.IsRoommate();
       bool isMarried = friendship != null && friendship.IsMarried();
@@ -642,6 +645,7 @@ Current time is {currentTime}, party location is {locationName}, and Player {Gam
 NPC characteristic: {npcCharacteristic}
 
 Style Guidelines:
+ - NPC name must be exactly as provided, including spaces, unique identifiers, symbols, etc.
  - Dialogue should feel personal, grounded, and affectionate. It should be raw sentence as how NPC will speak, do not include emotional explanations, and must not use character '\'.
  - Questions should open opportunities for meaningful roleplay or emotional responses. For Player response, give them both ways so they can make their choice.
  - Do not include any icons, comments, or extra formatting.";
@@ -668,7 +672,7 @@ This is some other context you can use: {summary} {data}";
 
       int heartLevel = 0;
       if (Game1.player.friendshipData.ContainsKey(npc.Name)) heartLevel = (int)Game1.player.friendshipData[npc.Name].Points / 250;
-      string relation = "";
+      string relation = heartLevel <= 2 ? "stranger" : heartLevel <= 4 ? "acquaintance" : heartLevel <= 6 ? "close friend" : "best friend";
 
       bool isDating = Game1.player.friendshipData.TryGetValue(npc.Name, out Friendship friendship) && friendship.IsDating();
       bool isRoommate = friendship != null && friendship.IsRoommate();
@@ -681,7 +685,6 @@ This is some other context you can use: {summary} {data}";
       else if (isMarried) relation = "married";
       else if (isEngaged) relation = "engaged";
       else if (isDating) relation = "dating";
-      else relation = heartLevel <= 6 ? "friend" : "best friend";
 
       string summary = "";
       if (npcConversationSummary.ContainsKey(npc.Name))
@@ -742,13 +745,14 @@ Current time is {currentTime}, picnic location is {locationName}, and Player {Ga
 {npcTarget} characteristic: {npcCharacteristic}
 
 Style Guidelines:
+ - NPC name must be exactly as provided, including spaces, unique identifiers, symbols, etc.
  - Dialogue should feel personal, grounded, and affectionate. It should be raw sentence as how NPC will speak, do not include emotional explanations, and must not use character '\'.
  - Questions should open opportunities for meaningful roleplay or emotional responses. For Player response, give them both ways so they can make their choice.
  - Do not include any icons, comments, or extra formatting.
 
 ";
 
-      var user = @$"{npcTarget} and Player {Game1.player.Name} is going for a picnic together at {locationName}. They are bringing {string.Join(", ", foodItems.ConvertAll(item => item.Name))} for the trip.
+      var user = @$"{npcTarget} and Player {Game1.player.Name} is going for a picnic together at {locationName}. They are bringing {string.Join(", ", foodItems.ConvertAll(item => item.DisplayName))} for the trip.
 This is some other context you can use: {summary} {data}";
 
       var responseMessage = await RequestOpenAiResponseAsync(system, user);

@@ -7,6 +7,7 @@ using StardewValley;
 using StardewValley.Menus;
 using UnlimitedEventExpansion;
 using StardewModdingAPI;
+using System.Reflection;
 
 namespace UnlimitedEventExpansion
 {
@@ -17,6 +18,9 @@ namespace UnlimitedEventExpansion
 
         private sealed class EventTimeEntryMenu : IClickableMenu
         {
+            private static readonly string[] ControllerStyleOptionNames = { "gamepadControls", "GamepadControls" };
+            private static readonly string[] SnappyMenuOptionNames = { "snappyMenus", "SnappyMenus" };
+
             private readonly Action<string> onConfirm;
             private readonly Action onCancel;
             private readonly string npcDisplayName;
@@ -30,6 +34,9 @@ namespace UnlimitedEventExpansion
             private readonly Rectangle cancelButtonBounds;
 
             private string validationMessage = string.Empty;
+            private bool controllerCursorOverrideApplied;
+            private bool? previousControllerStyleMenus;
+            private bool? previousSnappyMenus;
 
             public EventTimeEntryMenu(
                 string npcDisplayName,
@@ -64,9 +71,22 @@ namespace UnlimitedEventExpansion
                 timeTextBox.textLimit = 5;
                 timeTextBox.Selected = true;
                 Game1.keyboardDispatcher.Subscriber = timeTextBox;
+                EnableFreeControllerCursorForThisMenu();
 
                 if (!TryGetMinimumAllowedEventTime(out _))
                     validationMessage = TooLateToScheduleMessage;
+            }
+
+            protected override void cleanupBeforeExit()
+            {
+                ReleaseTextInputAndRestoreControllerCursor();
+                base.cleanupBeforeExit();
+            }
+
+            public override void emergencyShutDown()
+            {
+                ReleaseTextInputAndRestoreControllerCursor();
+                base.emergencyShutDown();
             }
 
             public override void update(GameTime time)
@@ -279,10 +299,7 @@ namespace UnlimitedEventExpansion
 
             private void CancelAndClose()
             {
-                if (Game1.keyboardDispatcher.Subscriber == timeTextBox)
-                    Game1.keyboardDispatcher.Subscriber = null;
-
-                timeTextBox.Selected = false;
+                ReleaseTextInputAndRestoreControllerCursor();
                 Game1.playSound("bigDeSelect");
                 onCancel();
             }
@@ -297,10 +314,7 @@ namespace UnlimitedEventExpansion
                     return;
                 }
 
-                if (Game1.keyboardDispatcher.Subscriber == timeTextBox)
-                    Game1.keyboardDispatcher.Subscriber = null;
-
-                timeTextBox.Selected = false;
+                ReleaseTextInputAndRestoreControllerCursor();
                 Game1.playSound("smallSelect");
                 onConfirm(normalizedEventTime);
             }
@@ -335,6 +349,122 @@ namespace UnlimitedEventExpansion
                 Game1.playSound("smallSelect");
             }
 
+            private void EnableFreeControllerCursorForThisMenu()
+            {
+                object? options = Game1.options;
+                if (options is null)
+                    return;
+
+                if (TryReadBooleanOption(options, ControllerStyleOptionNames, out bool controllerStyleEnabled))
+                {
+                    previousControllerStyleMenus = controllerStyleEnabled;
+                    TryWriteBooleanOption(options, ControllerStyleOptionNames, false);
+                    controllerCursorOverrideApplied = true;
+                }
+
+                if (TryReadBooleanOption(options, SnappyMenuOptionNames, out bool snappyMenusEnabled))
+                {
+                    previousSnappyMenus = snappyMenusEnabled;
+                    TryWriteBooleanOption(options, SnappyMenuOptionNames, false);
+                    controllerCursorOverrideApplied = true;
+                }
+            }
+
+            private void ReleaseTextInputAndRestoreControllerCursor()
+            {
+                if (Game1.keyboardDispatcher.Subscriber == timeTextBox)
+                    Game1.keyboardDispatcher.Subscriber = null;
+
+                timeTextBox.Selected = false;
+                RestoreControllerCursorOptions();
+            }
+
+            private void RestoreControllerCursorOptions()
+            {
+                if (!controllerCursorOverrideApplied)
+                    return;
+
+                object? options = Game1.options;
+                if (options is null)
+                    return;
+
+                if (previousControllerStyleMenus.HasValue)
+                    TryWriteBooleanOption(options, ControllerStyleOptionNames, previousControllerStyleMenus.Value);
+
+                if (previousSnappyMenus.HasValue)
+                    TryWriteBooleanOption(options, SnappyMenuOptionNames, previousSnappyMenus.Value);
+
+                controllerCursorOverrideApplied = false;
+            }
+
+            private static bool TryReadBooleanOption(object options, string[] memberNames, out bool value)
+            {
+                foreach (string memberName in memberNames)
+                {
+                    if (TryReadBooleanOption(options, memberName, out value))
+                        return true;
+                }
+
+                value = default;
+                return false;
+            }
+
+            private static bool TryReadBooleanOption(object options, string memberName, out bool value)
+            {
+                const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+                Type optionsType = options.GetType();
+
+                PropertyInfo? property = optionsType.GetProperty(memberName, flags);
+                if (property?.CanRead == true && property.PropertyType == typeof(bool) && property.GetValue(options) is bool propertyValue)
+                {
+                    value = propertyValue;
+                    return true;
+                }
+
+                FieldInfo? field = optionsType.GetField(memberName, flags);
+                if (field?.FieldType == typeof(bool) && field.GetValue(options) is bool fieldValue)
+                {
+                    value = fieldValue;
+                    return true;
+                }
+
+                value = default;
+                return false;
+            }
+
+            private static bool TryWriteBooleanOption(object options, string[] memberNames, bool value)
+            {
+                foreach (string memberName in memberNames)
+                {
+                    if (TryWriteBooleanOption(options, memberName, value))
+                        return true;
+                }
+
+                return false;
+            }
+
+            private static bool TryWriteBooleanOption(object options, string memberName, bool value)
+            {
+                const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+                Type optionsType = options.GetType();
+
+                PropertyInfo? property = optionsType.GetProperty(memberName, flags);
+                if (property?.CanWrite == true && property.PropertyType == typeof(bool))
+                {
+                    property.SetValue(options, value);
+                    return true;
+                }
+
+                FieldInfo? field = optionsType.GetField(memberName, flags);
+                if (field?.FieldType == typeof(bool) && !field.IsInitOnly)
+                {
+                    field.SetValue(options, value);
+                    return true;
+                }
+
+                return false;
+            }
+
         }
 
 
@@ -342,10 +472,28 @@ namespace UnlimitedEventExpansion
         public static void TryOpenScheduleEventTimeMenu(
         string eventNpcName,
         string eventType,
-        string eventDisplayName,
-        string npcDisplayName,
         string? npcResponseTemplate)
         {
+            if (Game1.getCharacterFromName(eventNpcName) is not NPC eventNpc)
+            {
+                Game1.addHUDMessage(new HUDMessage("NPC not found: " + eventNpcName, 3));
+                return;
+            }
+
+            if ((Game1.isRaining || Game1.isGreenRain || Game1.isLightning) && (eventType == "Campfire" || eventType == "Picnic"))
+            {
+                Game1.playSound("cancel");
+                iSmartPhoneApi.SendSmartphoneNotification("Cannot schedule outdoor events in this weather.", "Unlimited Events Expansion");
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(Config.OpenAIKey) && TotalEventRegisteredToday >= 1)
+            {
+                Game1.playSound("cancel");
+                iSmartPhoneApi.SendSmartphoneNotification("You can only schedule one event per day without an OpenAI key. Check out the mod page for more instructions!", "Unlimited Events Expansion");
+                return;
+            }
+
             if (!TryGetMinimumAllowedEventTime(out _))
             {
                 Game1.playSound("cancel");
@@ -353,9 +501,10 @@ namespace UnlimitedEventExpansion
                 return;
             }
 
+            string npcDisplayName = eventNpc.displayName;
             Game1.activeClickableMenu = new EventTimeEntryMenu(
                 npcDisplayName,
-                eventDisplayName,
+                eventType,
                 onConfirm: normalizedEventTime =>
                 {
                     bool isNewSchedule = TryAddPendingUnlimitedEvent(eventNpcName, eventType, normalizedEventTime);
@@ -370,12 +519,12 @@ namespace UnlimitedEventExpansion
 
                     if (!string.IsNullOrWhiteSpace(npcResponseTemplate))
                     {
-                        iSmartPhoneApi.SendSmartphoneMessageFromNPC(eventNpcName, $"{npcDisplayName}: {npcResponseTemplate}");
+                        iSmartPhoneApi.SendSmartphoneMessageFromNPC(eventNpcName, npcResponseTemplate);
                     }
                     else
                     {
                         string displayTime = FormatEventTimeForDisplay(normalizedEventTime);
-                        string feedback = $"Scheduled {eventDisplayName} with {npcDisplayName} at {displayTime}.";
+                        string feedback = $"Scheduled {eventType} with {npcDisplayName} at {displayTime}.";
                         Game1.addHUDMessage(new HUDMessage(feedback, 2));
                     }
                 },
@@ -396,6 +545,7 @@ namespace UnlimitedEventExpansion
                 return false;
 
             PendingUnlimitedEvents.Add(pendingEvent);
+            TotalEventRegisteredToday++;
             return true;
         }
 

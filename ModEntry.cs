@@ -32,9 +32,18 @@ namespace UnlimitedEventExpansion
             ModEntry.npcConversationSummary = npcConversationSummary;
         }
 
-        public void OpenScheduleEventTimeMenu(string eventNpcName, string eventType, string eventDisplayName, string npcDisplayName, string? npcResponseTemplate)
+        public void OpenScheduleEventTimeMenu(string eventNpcName, string eventType, string? npcResponseTemplate)
         {
-            ModEntry.TryOpenScheduleEventTimeMenu(eventNpcName, eventType, eventDisplayName, npcDisplayName, npcResponseTemplate);
+            ModEntry.TryOpenScheduleEventTimeMenu(eventNpcName, eventType, npcResponseTemplate);
+        }
+
+        public bool CanScheduleNewEvent()
+        {
+            if (string.IsNullOrWhiteSpace(ModEntry.Config.OpenAIKey))
+            {
+                return ModEntry.TotalEventRegisteredToday < 1;
+            }
+            return true;
         }
 
     }
@@ -49,6 +58,7 @@ namespace UnlimitedEventExpansion
         public static IModHelper SHelper;
         public static ISmartPhoneApi iSmartPhoneApi;
         public static List<(string NpcName, string EventType, string TimeOfDay)> PendingUnlimitedEvents = new();
+        public static int TotalEventRegisteredToday = 0;
 
 
         // public static JToken eventString;
@@ -189,7 +199,22 @@ namespace UnlimitedEventExpansion
             "(F)RetroPlant",
             "(F)TallHousePlant"
         };
-
+        
+        public static List<string> socialNpcBlacklist = new List<string>
+        {
+            "Leo",
+            "Krobus",
+            "Dwarf",
+            "Gunther",
+            "Birdie",
+            "Bouncer",
+            "MoonSBV",
+            "PanSBV",
+            "RaccoonSBV",
+            "Leximonster",
+            "Dianna",
+            "Torts"
+        };
 
         public static Dictionary<string, PicnicMapData> picnicMap;
 

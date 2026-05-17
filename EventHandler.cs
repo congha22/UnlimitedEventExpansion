@@ -9,6 +9,7 @@ using StardewValley;
 using Newtonsoft.Json.Linq;
 using StardewValley.Extensions;
 using System.Text.RegularExpressions;
+using StardewModdingAPI;
 
 namespace UnlimitedEventExpansion
 {
@@ -52,7 +53,7 @@ namespace UnlimitedEventExpansion
 
                     if (npcTarget != "Emily" && npcTarget != "Gus" && Game1.random.NextDouble() < 0.25)
                     {
-                        sb.Append($"gusviolin/7 8/farmer 5 6 1 {npcTarget} 10 5 2 Gus 11 6 2 Emily 4 11 1");
+                        sb.Append($"gusviolin/7 8/farmer 5 6 1 {npcTarget} 10 5 2 Gus 11 6 2 Emily 4 11 1/fade/pause 400");
                         sb.Append($"/friendship {npcTarget} 10");
                         sb.Append($"/setSkipActions d5a1lamdtd.UnlimitedEventExpansion.PlayerWarpper {event_map} 5 6 {npcTarget}\r\n");
                         sb.Append($"/animate Gus false true 723 16 17/pause 23000/stopAnimation Gus/pause 1000/faceDirection Gus 3/speak {npcTarget} \"Thanks, Gus. Your music is amazing.\"/faceDirection {npcTarget} 3/move Gus 0 2 2/doAction 11 9/move Gus 0 3 1/move Gus 12 0 3 true/pause 3000");
@@ -61,9 +62,9 @@ namespace UnlimitedEventExpansion
                     }
                     else
                     {
-                        sb.Append($"{conversation.Music}/7 8/farmer 5 6 1 {npcTarget} 9 6 3");
+                        sb.Append($"{conversation.Music}/7 8/farmer 5 6 1 {npcTarget} 9 6 3/fade");
                         sb.Append($"{foodTile} /friendship {npcTarget} 10");
-                        sb.Append($"/setSkipActions d5a1lamdtd.UnlimitedEventExpansion.PlayerWarpper {event_map} 5 6 {npcTarget}\r\n");
+                        sb.Append($"/pause 400/setSkipActions d5a1lamdtd.UnlimitedEventExpansion.PlayerWarpper {event_map} 5 6 {npcTarget}\r\n");
                     }
 
                     int lineNum = 1;
@@ -131,19 +132,13 @@ namespace UnlimitedEventExpansion
                                 }
 
                                 sb.Append($"_{option.Response}_{option.Reaction}{repPortraitId}");
-                                //if (i < entry.Player.Count - 1)
-                                //    sb.Append("_");
                             }
                             sb.Append("'\"");
                         }
                     }
 
-                    // Wrap up the event
                     sb.Append($"{addReward}/pause 500/end position 5 6");
-
-                    // Final event string
                     string rawEvent = sb.ToString();
-                    //Console.WriteLine(rawEvent);
 
 
 
@@ -205,7 +200,7 @@ namespace UnlimitedEventExpansion
                 List<string> requiredNpcNames = required_npc.ToList();
 
                 var eligibleNPCs = allVillagers
-                    .Where(npc => !new List<string> { "Krobus", "???", "Gunther", "Gil", "MorrisTod", "Torts", "Marlon", "Mister Qi", "Birdie", "Leo", "Henchman", "Bouncer", "Dwarf", npcTarget }.Contains(npc.Name)
+                    .Where(npc => !socialNpcBlacklist.Contains(npc.Name)
                         && !npc.IsInvisible
                         && npc.CanSocialize
                         && Game1.player.friendshipData.ContainsKey(npc.Name)
@@ -303,9 +298,9 @@ namespace UnlimitedEventExpansion
                     string addReward = randomItem != null ? $"/addItem {randomItem.QualifiedItemId}" : $"/addItem (O)220";
 
                     var sb = new StringBuilder();
-                    sb.Append($"{conversation.Music}/{host_tile[0]} {host_tile[1] + 2}/farmer {player_tile[0]} {player_tile[1]} {player_tile[2]} {npcTarget} {host_tile[0]} {host_tile[1]} {host_tile[2]} {guestTile}");
+                    sb.Append($"{conversation.Music}/{host_tile[0]} {host_tile[1] + 2}/farmer {player_tile[0]} {player_tile[1]} {player_tile[2]} {npcTarget} {host_tile[0]} {host_tile[1]} {host_tile[2]} {guestTile}/fade");
                     sb.Append($"{foodTile} {giftTile} {furnitureTile} {friendshipReward}");
-                    sb.Append($"/setSkipActions d5a1lamdtd.UnlimitedEventExpansion.PlayerWarpper {event_map} {player_tile[0]} {player_tile[1]} {npcTarget}\r\n");
+                    sb.Append($"/pause 400/setSkipActions d5a1lamdtd.UnlimitedEventExpansion.PlayerWarpper {event_map} {player_tile[0]} {player_tile[1]} {npcTarget}\r\n");
                     int lineNum = 1;
                     foreach (var entry in conversation.Dialogue)
                     {
@@ -375,8 +370,6 @@ namespace UnlimitedEventExpansion
                                 }
 
                                 sb.Append($"_{option.Response}_{option.Reaction}{repPortraitId}");
-                                //if (i < entry.Player.Count - 1)
-                                //    sb.Append("_");
                             }
                             sb.Append("'\"");
                         }
@@ -384,12 +377,7 @@ namespace UnlimitedEventExpansion
 
                     // Wrap up the event
                     sb.Append($"{addReward}/pause 500/end position {player_tile[0]} {player_tile[1]}");
-
-                    // Final event string
                     string rawEvent = sb.ToString();
-                    //Console.WriteLine(rawEvent);
-
-
 
                     QueueGeneratedEvent(new Event(rawEvent.Trim(), Game1.player), event_map, player_tile[0], player_tile[1], player_tile[2]);
                 }
@@ -478,9 +466,9 @@ namespace UnlimitedEventExpansion
                     }));
 
                     var sb = new StringBuilder();
-                    sb.Append($"{conversation.Music}/{player_tile[0]} {player_tile[1]}/farmer {player_tile[0]} {player_tile[1]} {player_tile[2]} {npcTarget} {npc_tile[0]} {npc_tile[1]} {npc_tile[2]}");
+                    sb.Append($"{conversation.Music}/{player_tile[0]} {player_tile[1]}/farmer {player_tile[0]} {player_tile[1]} {player_tile[2]} {npcTarget} {npc_tile[0]} {npc_tile[1]} {npc_tile[2]}/fade");
                     sb.Append($"{giftTile} {furnitureTile} {foodTile} /friendship {npcTarget} 20");
-                    sb.Append($"/setSkipActions d5a1lamdtd.UnlimitedEventExpansion.PlayerWarpper {event_map} {player_tile[0]} {player_tile[1]} {npcTarget}\r\n");
+                    sb.Append($"/pause 400/setSkipActions d5a1lamdtd.UnlimitedEventExpansion.PlayerWarpper {event_map} {player_tile[0]} {player_tile[1]} {npcTarget}\r\n");
                     int lineNum = 1;
                     foreach (var entry in conversation.Dialogue)
                     {
@@ -543,8 +531,6 @@ namespace UnlimitedEventExpansion
                                 }
 
                                 sb.Append($"_{option.Response}_{option.Reaction}{repPortraitId}");
-                                //if (i < entry.Player.Count - 1)
-                                //    sb.Append("_");
                             }
                             sb.Append("'\"");
                         }
@@ -552,12 +538,7 @@ namespace UnlimitedEventExpansion
 
                     // Wrap up the event
                     sb.Append($"{addReward}/pause 500/end position {player_tile[0]} {player_tile[1]}");
-
-                    // Final event string
                     string rawEvent = sb.ToString();
-                    //Console.WriteLine(rawEvent);
-
-
 
                     QueueGeneratedEvent(new Event(rawEvent.Trim(), Game1.player), event_map, player_tile[0], player_tile[1], 2);
 
@@ -615,14 +596,9 @@ namespace UnlimitedEventExpansion
             // npc
             List<NPC> allVillagers = Utility.getAllVillagers().ToList();
 
-            var excluded = new HashSet<string> {
-                "Krobus", "???", "Gunther", "Gil", "MorrisTod", "Torts",
-                "Marlon", "Mister Qi", "Birdie", "Leo", "Henchman", "Bouncer", "Dwarf"
-            };
-
             var eligibleNPCs = allVillagers
                 .Where(npc =>
-                    !excluded.Contains(npc.Name) &&
+                    !socialNpcBlacklist.Contains(npc.Name) &&
                     !npc.IsInvisible &&
                     npc.CanSocialize &&
                     Game1.player.friendshipData.TryGetValue(npc.Name, out var data) &&
@@ -688,9 +664,9 @@ namespace UnlimitedEventExpansion
                     }));
 
                     var sb = new StringBuilder();
-                    sb.Append($"{conversation.Music}/{player_tile[0]} {player_tile[1]}/farmer {player_tile[0]} {player_tile[1]} {player_tile[2]} {guestTile}"); // music, view, player-npc tiles
+                    sb.Append($"{conversation.Music}/{player_tile[0]} {player_tile[1]}/farmer {player_tile[0]} {player_tile[1]} {player_tile[2]} {guestTile}/fade"); // music, view, player-npc tiles
                     sb.Append($"{setupCamp} {chairTiles} {logTiles} {furnitureTile}/friendship {npcTarget} 20");
-                    sb.Append($"/setSkipActions d5a1lamdtd.UnlimitedEventExpansion.campfireSkipWarpper {event_map} {player_tile[0]} {player_tile[1]} {campfire_tile[0]} {campfire_tile[1]} {npcTarget}\r\n");
+                    sb.Append($"/pause 400/setSkipActions d5a1lamdtd.UnlimitedEventExpansion.campfireSkipWarpper {event_map} {player_tile[0]} {player_tile[1]} {campfire_tile[0]} {campfire_tile[1]} {npcTarget}\r\n");
                     int lineNum = 1;
                     foreach (var entry in conversation.Dialogue)
                     {
@@ -759,8 +735,6 @@ namespace UnlimitedEventExpansion
                                     }
                                 }
                                 sb.Append($"_{option.Response}_{option.Reaction}{repPortraitId}");
-                                //if (i < entry.Player.Count - 1)
-                                //    sb.Append("_");
                             }
                             sb.Append("'\"");
                         }
@@ -768,11 +742,7 @@ namespace UnlimitedEventExpansion
 
                     // Wrap up the event
                     sb.Append($"{reward} {endCamp} /pause 500/end position {player_tile[0]} {player_tile[1]}");
-
-                    // Final event string
                     string rawEvent = sb.ToString();
-                    //Console.WriteLine(rawEvent);
-
 
                     QueueGeneratedEvent(new Event(rawEvent.Trim(), Game1.player), event_map, player_tile[0], player_tile[1], 2);
 

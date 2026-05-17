@@ -7,60 +7,79 @@ namespace UnlimitedEventExpansion
     public partial class ModEntry
     {
 
-        public static void ConfigMenu (IContentPatcherAPI api, IManifest ModManifest, IModHelper Helper)
+        public static void ConfigMenu(IContentPatcherAPI api, IManifest modManifest, IModHelper helper)
         {
-            
-
             // get Generic Mod Config Menu's API (if it's installed)
-            var configMenu = Helper.ModRegistry.GetApi<UnlimitedEventExpansion.Data.IGenericModConfigMenuApi>("spacechase0.GenericModConfigMenu");
+            var configMenu = helper.ModRegistry.GetApi<UnlimitedEventExpansion.Data.IGenericModConfigMenuApi>("spacechase0.GenericModConfigMenu");
             if (configMenu is null)
                 return;
 
             // register mod
             configMenu.Register(
-                mod: ModManifest,
+                mod: modManifest,
                 reset: () => Config = new ModConfig(),
-                save: () => Helper.WriteConfig(Config)
+                save: () => helper.WriteConfig(Config),
+                titleScreenOnly: true
             );
 
-            // add OpenAI key text option
+            configMenu.AddParagraph(
+                mod: modManifest,
+                text: () => "All options in this menu require OpenAI key provided to be effective. Without a key, the mod will use a shared key with stricter limits, and the options below won't have any effect."
+            );
+
+
+            configMenu.AddSectionTitle(
+                mod: modManifest,
+                text: () => "OpenAI setup"
+            );
+
             configMenu.AddTextOption(
-                mod: ModManifest,
+                mod: modManifest,
                 getValue: () => Config?.OpenAIKey ?? "",
-                setValue: value => Config.OpenAIKey = value,
-                name: () => "OpenAI key",
-                tooltip: () => "If you have an OpenAI key, provide it here. Restart your game after setting the key.\nHaving your own key allows you to bypass the limit, and have much better experiences."
+                setValue: value => Config.OpenAIKey = value?.Trim() ?? "",
+                name: () => "OpenAI API key",
+                tooltip: () => "Use your own key to remove shared usage limits.\nGet one from https://platform.openai.com/account/api-keys."
             );
 
             configMenu.AddTextOption(
-                mod: ModManifest,
-                name: () => "OpenAI model",
-                tooltip: () => "Require OpenAI Key provided.\nSelect the OpenAI model to use. Only effective if AI key is provided.\nNano-level model are much cheaper, but it comes with lower quality.",
+                mod: modManifest,
+                name: () => "Model",
+                tooltip: () => "Choose the OpenAI model to use when your own key is set.",
                 getValue: () => Config.OpenAIModel,
                 setValue: value => Config.OpenAIModel = value,
                 allowedValues: new string[]
                 {
                     ModConfig.OpenAIModel_51,
-                    ModConfig.OpenAIModel_5mini,
-                    ModConfig.OpenAIModel_5nano,
                     ModConfig.OpenAIModel_54mini,
-                    ModConfig.OpenAIModel_54nano
+                    ModConfig.OpenAIModel_54nano,
+                    ModConfig.OpenAIModel_5mini,
+                    ModConfig.OpenAIModel_5nano
                 },
-                formatAllowedValue: value => value
+                formatAllowedValue: FormatOpenAIModel
+            );
+
+            configMenu.AddSectionTitle(
+                mod: modManifest,
+                text: () => "Event generation"
+            );
+
+            configMenu.AddParagraph(
+                mod: modManifest,
+                text: () => "These options control event quality and pacing when your own OpenAI key is configured."
             );
 
             configMenu.AddBoolOption(
-                mod: ModManifest,
-                name: () => "Allow early event",
-                tooltip: () => "Require OpenAI Key provided. Restart your game after change this setting.\nEnable events at anytime without meeting heartlevel requirements.",
+                mod: modManifest,
+                name: () => "Ignore heart-level requirements",
+                tooltip: () => "If enabled, events can trigger without the usual heart-level checks.\nRestart the game after changing this option.",
                 getValue: () => Config.AllowEarlyEvent,
                 setValue: value => Config.AllowEarlyEvent = value
             );
 
             configMenu.AddTextOption(
-                mod: ModManifest,
+                mod: modManifest,
                 name: () => "Event length",
-                tooltip: () => "Require OpenAI Key provided.\nSelect the preferred event length. Max of 10, 12, 15 and 20 each level.",
+                tooltip: () => "Controls how much event dialogue is generated per heart level.",
                 getValue: () => Config.EventLength,
                 setValue: value => Config.EventLength = value,
                 allowedValues: new string[]
@@ -70,13 +89,13 @@ namespace UnlimitedEventExpansion
                     ModConfig.EventLengthLong,
                     ModConfig.EventLengthExtraLong
                 },
-                formatAllowedValue: value => value
+                formatAllowedValue: FormatEventLength
             );
 
             configMenu.AddTextOption(
-                mod: ModManifest,
-                name: () => "Characteristic mode",
-                tooltip: () => "Require OpenAI Key provided.\nSelect the preferred NPC characteristic quality.\nHigher quality provides more detailed characteristics but cost higher usage\n(minimal -100, long +100 extra token per NPC per use).",
+                mod: modManifest,
+                name: () => "NPC detail level",
+                tooltip: () => "Higher detail gives richer NPC personality at higher token cost.\nCompared to Standard: Minimal uses about 100 fewer tokens, Detailed uses about 100 extra tokens per NPC.",
                 getValue: () => Config.CharacteristicMode,
                 setValue: value => Config.CharacteristicMode = value,
                 allowedValues: new string[]
@@ -85,10 +104,44 @@ namespace UnlimitedEventExpansion
                     ModConfig.CharacteristicModeShort,
                     ModConfig.CharacteristicModeLong
                 },
-                formatAllowedValue: value => value
+                formatAllowedValue: FormatCharacteristicMode
             );
+        }
 
+        private static string FormatOpenAIModel(string value)
+        {
+            return value switch
+            {
+                ModConfig.OpenAIModel_51 => "GPT-5.1 (best quality, higher cost)",
+                ModConfig.OpenAIModel_5mini => "GPT-5 Mini (balanced)",
+                ModConfig.OpenAIModel_5nano => "GPT-5 Nano (lowest cost)",
+                ModConfig.OpenAIModel_54mini => "GPT-5.4 Mini (balanced, newer)",
+                ModConfig.OpenAIModel_54nano => "GPT-5.4 Nano (low cost, newer)",
+                _ => value
+            };
+        }
 
+        private static string FormatEventLength(string value)
+        {
+            return value switch
+            {
+                ModConfig.EventLengthShort => "Short (up to 10 lines)",
+                ModConfig.EventLengthMedium => "Medium (up to 12 lines)",
+                ModConfig.EventLengthLong => "Long (up to 15 lines)",
+                ModConfig.EventLengthExtraLong => "Extra long (up to 20 lines)",
+                _ => value
+            };
+        }
+
+        private static string FormatCharacteristicMode(string value)
+        {
+            return value switch
+            {
+                ModConfig.CharacteristicModeMinimal => "Minimal (lower token use)",
+                ModConfig.CharacteristicModeShort => "Standard (recommended)",
+                ModConfig.CharacteristicModeLong => "Detailed (higher token use)",
+                _ => value
+            };
         }
 
     }

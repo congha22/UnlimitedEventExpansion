@@ -44,6 +44,36 @@
       "Lewis"
     ]
   },
+  "LeahHouse": {
+    "event_map": "LeahHouse",
+    "host_tile": [12, 6, 2],
+    "player_tile": [14, 9, 3],
+    "npc_tiles": [
+      [14, 11, 0],
+      [10, 11, 0],
+      [10, 9, 1],
+      [10, 7, 1],
+      [12, 13, 0]
+    ],
+    "food_tiles": [
+      [11, 11]
+    ],
+    "decorable_tiles": [
+      [8, 5],
+      [9, 5],
+      [13, 5],
+      [5, 4]
+    ],
+    "gift_tiles": [
+      [5, 6],
+      [6, 6],
+      [6, 5],
+      [9, 6]
+    ],
+    "required_npc": [
+      "Elliott"
+    ]
+  },
   "ManorHouse": {
     "event_map": "ManorHouse",
     "host_tile": [8, 5, 2],
@@ -166,8 +196,8 @@
       [3, 20, 0],
       [5, 16, 3],
       [5, 17, 3],
-      [5, 13, 0],
-      [6, 13, 0]
+      [5, 13, 2],
+      [6, 13, 2]
     ],
     "food_tiles": [
       [2, 19]

@@ -2,6 +2,7 @@
 using StardewModdingAPI.Events;
 using StardewValley;
 using System.Text;
+using System.Text.Json;
 using Microsoft.Xna.Framework.Graphics;
 using StardewValley.Network;
 using Newtonsoft.Json.Linq;
@@ -273,6 +274,34 @@ namespace UnlimitedEventExpansion
 
         private void OnSaveLoaded(object sender, SaveLoadedEventArgs e)
         {
+            string targetModId = this.ModManifest.UniqueID;
+            var modInfo = this.Helper.ModRegistry.Get(targetModId);
+
+            if (modInfo != null)
+            {
+                Task.Run(async () =>
+                {
+                    bool hasNewerVersion = await CheckForNewerVersion(modInfo);
+
+                    if (hasNewerVersion)
+                    {
+                        DelayedAction.functionAfterDelay(() =>
+                        {
+                            try
+                            {
+                                SMonitor.Log($"UnlimitedEventExpansion: Newer version available", LogLevel.Warn);
+                                Game1.drawLetterMessage("=== UnlimitedEventExpansion ===^^Newer version is available. Your current version may be outdated and no longer working.^^");
+
+                                iSmartPhoneApi.SendSmartphoneNotification("=== UnlimitedEventExpansion ===^^Newer version is available. Your current version may be outdated and no longer working.^^", "UnlimitedEventExpansion");
+                            }
+                            catch (Exception ex)
+                            {
+                                SMonitor.Log($"UnlimitedEventExpansion: Unable to notify about newer version: {ex}", LogLevel.Trace);
+                            }
+                        }, 10000);
+                    }
+                });
+            }
 
             string npc_characteristic = Helper.ModContent.GetInternalAssetName("assets/npc_characteristics_short.json").BaseName;
             string npc_characteristic_minimal = Helper.ModContent.GetInternalAssetName("assets/npc_characteristics_minimal.json").BaseName;
@@ -285,13 +314,13 @@ namespace UnlimitedEventExpansion
             string npc_portraits = Helper.ModContent.GetInternalAssetName("assets/npc_portraits.json").BaseName;
             NpcPortrait = Helper.ModContent.Load<Dictionary<string, string>>(npc_portraits);
 
-            string birthdayMapAsset = Helper.ModContent.GetInternalAssetName("assets/birthday_map.json").BaseName;
+            string birthdayMapAsset = Helper.ModContent.GetInternalAssetName("assets/map_birthday.json").BaseName;
             birthdayMap = Helper.ModContent.Load<Dictionary<string, BirthdayMapData>>(birthdayMapAsset);
 
-            string picnicMapAsset = Helper.ModContent.GetInternalAssetName("assets/picnic_map.json").BaseName;
+            string picnicMapAsset = Helper.ModContent.GetInternalAssetName("assets/map_picnic.json").BaseName;
             picnicMap = Helper.ModContent.Load<Dictionary<string, PicnicMapData>>(picnicMapAsset);
 
-            string campfireMapAsset = Helper.ModContent.GetInternalAssetName("assets/campfire_map.json").BaseName;
+            string campfireMapAsset = Helper.ModContent.GetInternalAssetName("assets/map_campfire.json").BaseName;
             campfireMap = Helper.ModContent.Load<Dictionary<string, CampfireMapData>>(campfireMapAsset);
 
             HashSet<string> universalHates = new HashSet<string>();
@@ -310,7 +339,7 @@ namespace UnlimitedEventExpansion
                         universalDislikes.Add(id);
                 }
             }
-            
+
             foreach (var pair in Game1.objectData)
             {
                 var baseData = pair.Value;
@@ -318,8 +347,8 @@ namespace UnlimitedEventExpansion
 
 
                 if (baseData.Category == -7 && baseData.Price >= 150 && baseData.Price <= 1000
-                    && !baseData.Name.Contains("Pickled") && !baseData.Name.Contains("Elixir") && !baseData.Name.Contains("Roe") && !baseData.Name.Contains("Mayonnaise") && !baseData.Name.Contains("Smoked") 
-                    && !baseData.Name.Contains("Oil") && !baseData.Name.Contains("Jelly") && !baseData.Name.Contains("Honey") && !baseData.Name.Contains("Wine") && !baseData.Name.Contains("Dried") 
+                    && !baseData.Name.Contains("Pickled") && !baseData.Name.Contains("Elixir") && !baseData.Name.Contains("Roe") && !baseData.Name.Contains("Mayonnaise") && !baseData.Name.Contains("Smoked")
+                    && !baseData.Name.Contains("Oil") && !baseData.Name.Contains("Jelly") && !baseData.Name.Contains("Honey") && !baseData.Name.Contains("Wine") && !baseData.Name.Contains("Dried")
                     && !baseData.Name.Contains("Juice") && !universalHates.Contains(baseId) && !universalDislikes.Contains(baseId))
                 {
                     var item = new StardewValley.Object(baseId, 1);
@@ -331,10 +360,10 @@ namespace UnlimitedEventExpansion
 
         private void onOneSecondUpdated(object sender, OneSecondUpdateTickedEventArgs e)
         {
-            if (!Context.IsWorldReady || Game1.player == null)
+            if (!Context.IsWorldReady || Game1.player == null || Game1.currentLocation == null)
                 return;
 
-            if (Game1.eventUp || Game1.activeClickableMenu != null || !Game1.player.canMove)
+            if (Game1.eventUp || Game1.activeClickableMenu != null || !Context.IsPlayerFree)
                 return;
 
             if (!TryPeekGeneratedEvent(out QueuedEventStart queuedEvent))
@@ -346,13 +375,19 @@ namespace UnlimitedEventExpansion
                 TryDequeueGeneratedEvent(queuedEvent);
                 return;
             }
+            Game1.activeClickableMenu = null;
+            if (Game1.player.currentLocation != location)
+            {
+                Game1.warpFarmer(queuedEvent.LocationName, queuedEvent.WarpX, queuedEvent.WarpY, queuedEvent.FacingDirection);
+
+                // farmhand will have to wait
+                if (!Game1.IsMasterGame)
+                    return;
+            }
 
             if (!TryDequeueGeneratedEvent(queuedEvent))
                 return;
 
-            Game1.activeClickableMenu = null;
-            if (Game1.player.currentLocation != location)
-                Game1.warpFarmer(queuedEvent.LocationName, queuedEvent.WarpX, queuedEvent.WarpY, queuedEvent.FacingDirection);
             location.startEvent(queuedEvent.Event);
 
             Game1.player.completelyStopAnimatingOrDoingAction();
@@ -415,12 +450,13 @@ namespace UnlimitedEventExpansion
             ClearGeneratedEventQueue();
             totalSkippedEvent = 0;
             PendingUnlimitedEvents.Clear();
+            TotalEventRegisteredToday = 0;
         }
 
 
         private void OnTimeChanged(object sender, TimeChangedEventArgs e)
         {
-            if (PendingUnlimitedEvents.Count > 0 && isPlayerFree() && e.NewTime < 2500)
+            if (PendingUnlimitedEvents.Count > 0 && Context.IsPlayerFree && e.NewTime < 2500)
             {
                 foreach (var scheduledEvent in PendingUnlimitedEvents.ToList())
                 {
@@ -525,6 +561,68 @@ namespace UnlimitedEventExpansion
             }
         }
 
+        private static async Task<(bool IsLatest, string? LatestVersion, string? LatestUrl)> CheckForModUpdate(IModInfo modInfo)
+        {
+            if (modInfo?.Manifest == null)
+                return (true, null, null);
+
+            var request = new
+            {
+                mods = new[]
+                {
+                    new
+                    {
+                        id = modInfo.Manifest.UniqueID,
+                        updateKeys = modInfo.Manifest.UpdateKeys,
+                        installedVersion = modInfo.Manifest.Version.ToString(),
+                        isBroken = false
+                    }
+                },
+                apiVersion = Constants.ApiVersion.ToString(),
+                gameVersion = Game1.version.ToString(),
+                platform = Constants.TargetPlatform.ToString(),
+                includeExtendedMetadata = false
+            };
+
+            var jsonOptions = new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+            };
+
+            using var content = new StringContent(
+                System.Text.Json.JsonSerializer.Serialize(request, jsonOptions),
+                Encoding.UTF8,
+                "application/json"
+            );
+
+            using HttpResponseMessage response = await new HttpClient().PostAsync($"https://smapi.io/api/v{Constants.ApiVersion}/mods", content);
+            response.EnsureSuccessStatusCode();
+
+            using JsonDocument document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            JsonElement result = document.RootElement[0];
+
+            if (result.TryGetProperty("suggestedUpdate", out JsonElement suggestedUpdate) && suggestedUpdate.ValueKind == JsonValueKind.Object)
+            {
+                return (
+                    false,
+                    suggestedUpdate.GetProperty("version").GetString(),
+                    suggestedUpdate.GetProperty("url").GetString()
+                );
+            }
+
+            return (true, null, null);
+        }
+
+        public static async Task<bool> CheckForNewerVersion(IModInfo? modInfo)
+        {
+            if (modInfo?.Manifest == null)
+                return false;
+
+            var update = await CheckForModUpdate(modInfo);
+            return !update.IsLatest;
+        }
+
+
         public static bool CanTriggerEvent()
         {
             return totalSkippedEvent < 3;
@@ -563,20 +661,20 @@ namespace UnlimitedEventExpansion
             else
             {
                 // set 1
-                string k1 = "sk-proj-EcsOH35lsXluhKPQfghxgRprEWtuKSJZULD6uWNTkV8";
-                string k2 = "_C1UugAKmxITkeJoWGiLs-oPqwVDEZqT3BlbkFJqk_DVafGmHLfHCja253VsxdI";
-                string k3 = "-m0NsMFDcewMAzEfuYy-F8_x0GzYj5teeVTFSJl9PfkdCTk4wA";
+                string k1 = "";
+                string k2 = "";
+                string k3 = "";
 
-                string xk1 = "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";
+                string xk1 = "";
                 string xk2 = "";
                 string xk3 = "";
 
                 // set 2
-                string k11 = "sk-proj-EcsOH35lsXluhKPQfghxgRprEWtuKSJZULD6uWNTkV8";
-                string k21 = "_C1UugAKmxITkeJoWGiLs-oPqwVDEZqT3BlbkFJqk_DVafGmHLfHCja253VsxdI";
-                string k31 = "-m0NsMFDcewMAzEfuYy-F8_x0GzYj5teeVTFSJl9PfkdCTk4wA";
+                string k11 = "";
+                string k21 = "";
+                string k31 = "";
 
-                string xk11 = "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";
+                string xk11 = "";
                 string xk21 = "";
                 string xk31 = "";
 
@@ -656,20 +754,5 @@ namespace UnlimitedEventExpansion
                 }
             }
         }
-
-        private bool isPlayerFree()
-        {
-            return Game1.timeOfDay > 600
-            && Game1.player.CanMove
-            && !(Game1.player.isRidingHorse()
-                || Game1.currentLocation == null
-                || Game1.eventUp
-                || Game1.isFestival()
-                || Game1.IsFading()
-                || Game1.activeClickableMenu != null
-                || Game1.dialogueUp
-                || Game1.player.UsingTool);
-        }
     }
-
 }
