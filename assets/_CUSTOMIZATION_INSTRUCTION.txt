@@ -67,8 +67,6 @@ Each top-level key is a map group. Each entry must include:
 - required_npc (string[])
 
 Important:
-- Keep both "Saloon" and "CommunityCenter" entries.
-  They are used as fallback maps.
 - If you do not need required NPCs, use an empty list: []
   (do not remove the key).
 

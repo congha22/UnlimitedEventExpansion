@@ -209,11 +209,11 @@ namespace UnlimitedEventExpansion
                     .ToList();
 
                 List<NPC> requiredVisitors = eligibleNPCs
-                    .Where(npc => requiredNpcNames.Contains(npc.Name))
+                    .Where(npc => requiredNpcNames.Contains(npc.Name) && npc.Name != npcTarget)
                     .ToList();
 
                 List<NPC> pool = eligibleNPCs
-                    .Where(npc => !requiredVisitors.Contains(npc))
+                    .Where(npc => !requiredVisitors.Contains(npc) && npc.Name != npcTarget)
                     .ToList();
 
                 int remainingSlots = npc_tiles.Count - requiredVisitors.Count;

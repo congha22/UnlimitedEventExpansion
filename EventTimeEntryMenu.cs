@@ -516,15 +516,17 @@ namespace UnlimitedEventExpansion
                         Game1.addHUDMessage(new HUDMessage(TimeSlotUnavailableMessage, 3));
                         return;
                     }
+                
+                    string displayTime = FormatEventTimeForDisplay(normalizedEventTime);
+                        string feedback = $"Scheduled {eventType} with {npcDisplayName} at {displayTime}.";
 
                     if (!string.IsNullOrWhiteSpace(npcResponseTemplate))
                     {
                         iSmartPhoneApi.SendSmartphoneMessageFromNPC(eventNpcName, npcResponseTemplate);
+                        iSmartPhoneApi.SendSmartphoneNotification(feedback, "Unlimited Events Expansion");
                     }
                     else
                     {
-                        string displayTime = FormatEventTimeForDisplay(normalizedEventTime);
-                        string feedback = $"Scheduled {eventType} with {npcDisplayName} at {displayTime}.";
                         iSmartPhoneApi.SendSmartphoneNotification(feedback, "Unlimited Events Expansion");
                     }
                 },
