@@ -103,11 +103,6 @@ namespace UnlimitedEventExpansion
         }
         while (hasMore && !string.IsNullOrWhiteSpace(nextPage));
 
-        if (perModelTotals.Count == 0)
-        {
-          return (-1, -1);
-        }
-
         // Aggregate totals for premium and regular model groups
         long premiumInputTotal = 0, premiumOutputTotal = 0;
         long regularInputTotal = 0, regularOutputTotal = 0;
@@ -151,6 +146,16 @@ namespace UnlimitedEventExpansion
     }
 
 
+
+    private static async Task<string> RequestAiResponseAsync(string instructionPrompt, string userPrompt)
+    {
+      if (ModConfig.IsGeminiModel(EventModel))
+      {
+        return await RequestGeminiResponseAsync(instructionPrompt, userPrompt);
+      }
+
+      return await RequestOpenAiResponseAsync(instructionPrompt, userPrompt);
+    }
 
     private static async Task<string> RequestOpenAiResponseAsync(string instructionPrompt, string userPrompt)
     {
@@ -199,8 +204,8 @@ namespace UnlimitedEventExpansion
       {
         // SMonitor.Log(jsonResponse, LogLevel.Error);
 
-        if (TryExtractResponseMessage(jsonResponse, out var responseMessage))
-          return responseMessage;
+        if (TryExtractOpenAiResponseMessage(jsonResponse, out var responseMessage))
+          return NormalizeModelResponseText(responseMessage);
 
         return string.Empty;
       }
@@ -209,7 +214,65 @@ namespace UnlimitedEventExpansion
       return string.Empty;
     }
 
-    private static bool TryExtractResponseMessage(string jsonResponse, out string responseMessage)
+    private static async Task<string> RequestGeminiResponseAsync(string instructionPrompt, string userPrompt)
+    {
+      using var httpClient = new HttpClient();
+      httpClient.DefaultRequestHeaders.Add("X-goog-api-key", EventKey);
+
+      var requestBody = new Dictionary<string, object>
+            {
+                {
+                    "systemInstruction",
+                    new
+                    {
+                        parts = new object[]
+                        {
+                            new { text = instructionPrompt }
+                        }
+                    }
+                },
+                {
+                    "contents",
+                    new object[]
+                    {
+                        new
+                        {
+                            role = "user",
+                            parts = new object[]
+                            {
+                                new { text = userPrompt }
+                            }
+                        }
+                    }
+                },
+                {
+                    "generationConfig",
+                    new
+                    {
+                        thinkingConfig = new { thinkingLevel = "MINIMAL" }
+                    }
+                }
+            };
+
+      var jsonRequest = JsonConvert.SerializeObject(requestBody);
+      var httpContent = new StringContent(jsonRequest, Encoding.UTF8, "application/json");
+      string requestUrl = $"https://generativelanguage.googleapis.com/v1beta/models/{Uri.EscapeDataString(EventModel)}:generateContent";
+      var httpResponse = await httpClient.PostAsync(requestUrl, httpContent);
+      var jsonResponse = await httpResponse.Content.ReadAsStringAsync();
+
+      if (httpResponse.IsSuccessStatusCode)
+      {
+        if (TryExtractGeminiResponseMessage(jsonResponse, out var responseMessage))
+          return NormalizeModelResponseText(responseMessage);
+
+        return string.Empty;
+      }
+
+      LogGeminiError(httpResponse, jsonResponse);
+      return string.Empty;
+    }
+
+    private static bool TryExtractOpenAiResponseMessage(string jsonResponse, out string responseMessage)
     {
       responseMessage = string.Empty;
 
@@ -235,6 +298,54 @@ namespace UnlimitedEventExpansion
         SMonitor.Log($"Error parsing OpenAI response: {ex.Message}", LogLevel.Error);
         return false;
       }
+    }
+
+    private static bool TryExtractGeminiResponseMessage(string jsonResponse, out string responseMessage)
+    {
+      responseMessage = string.Empty;
+
+      try
+      {
+        var responseJson = JObject.Parse(jsonResponse);
+        responseMessage = string.Join("\n", responseJson
+            .SelectTokens("$.candidates[*].content.parts[*].text")
+            .Select(token => token?.ToString())
+            .Where(text => !string.IsNullOrWhiteSpace(text)));
+
+        return !string.IsNullOrWhiteSpace(responseMessage);
+      }
+      catch (JsonException ex)
+      {
+        SMonitor.Log($"Error parsing Gemini response: {ex.Message}", LogLevel.Error);
+        return false;
+      }
+    }
+
+    private static string NormalizeModelResponseText(string responseMessage)
+    {
+      if (string.IsNullOrWhiteSpace(responseMessage))
+        return string.Empty;
+
+      string trimmed = responseMessage.Trim();
+
+      if (trimmed.StartsWith("```", StringComparison.Ordinal))
+      {
+        int firstNewLine = trimmed.IndexOf('\n');
+        if (firstNewLine >= 0)
+          trimmed = trimmed.Substring(firstNewLine + 1);
+
+        if (trimmed.EndsWith("```", StringComparison.Ordinal))
+          trimmed = trimmed.Substring(0, trimmed.Length - 3);
+
+        trimmed = trimmed.Trim();
+      }
+
+      int objectStart = trimmed.IndexOf('{');
+      int objectEnd = trimmed.LastIndexOf('}');
+      if (objectStart >= 0 && objectEnd > objectStart)
+        return trimmed.Substring(objectStart, objectEnd - objectStart + 1).Trim();
+
+      return trimmed;
     }
 
     private static JToken ConvertToJToken(string responseMessage)
@@ -276,6 +387,34 @@ namespace UnlimitedEventExpansion
       SMonitor.Log($"Unable to receive AI content. {errorMessage}\n\n", LogLevel.Error);
     }
 
+    private static void LogGeminiError(HttpResponseMessage httpResponse, string responseBody)
+    {
+      var statusCode = (int)httpResponse.StatusCode;
+      string errorMessage = "Check Gemini API key and selected model.";
+
+      switch (statusCode)
+      {
+        case 400:
+          errorMessage = "Bad request. Please check the selected Gemini model and payload format.";
+          break;
+        case 403:
+          errorMessage = "Access denied. Please verify your Gemini API key permissions.";
+          break;
+        case 429:
+          errorMessage = "Rate limit exceeded. Please try again in a few minutes.";
+          break;
+        case 500:
+          errorMessage = "Server error while processing Gemini request. Please try again.";
+          break;
+        case 503:
+          errorMessage = "Gemini service is temporarily unavailable. Please try again later.";
+          break;
+      }
+
+      SMonitor.Log($"Gemini error {statusCode}: {responseBody}", LogLevel.Error);
+      SMonitor.Log($"Unable to receive AI content. {errorMessage}\n\n", LogLevel.Error);
+    }
+
 
     private static string GetNpcCharacteristicForPrompt(string npcName, bool minimal = false)
     {
@@ -289,7 +428,7 @@ namespace UnlimitedEventExpansion
       string npcCharacteristic = $" {npc.Name} is {npcAge}, {npcManner}, and is {npcSocial}";
 
       // CUSTOM CHARACTERISTIC OVERRIDE
-      if (!string.IsNullOrWhiteSpace(Config.OpenAIKey))
+      if (!string.IsNullOrWhiteSpace(Config.Key))
       {
         if (Config.CharacteristicMode == ModConfig.CharacteristicModeLong && NpcCharacteristicsLong.TryGetValue(npc.Name, out string? customCharacteristicLong) && !string.IsNullOrWhiteSpace(customCharacteristicLong))
         {
@@ -328,7 +467,7 @@ namespace UnlimitedEventExpansion
 
     private static string GetPreferedEventLength()
     {
-      if (string.IsNullOrWhiteSpace(Config.OpenAIKey))
+      if (string.IsNullOrWhiteSpace(Config.Key))
         return "Keep the total conversation under 8-10 exchanges, with each dialogue under 30 words.";
 
       switch (Config.EventLength)
@@ -344,6 +483,21 @@ namespace UnlimitedEventExpansion
         default:
           return "Keep the total conversation under 8-10 exchanges, with each dialogue under 30 words.";
       }
+    }
+
+    private static string AppendLanguageInstruction(string systemInstruction)
+    {
+      if (string.IsNullOrWhiteSpace(systemInstruction))
+        return string.Empty;
+
+      string selectedLanguage = Config?.Language?.Trim() ?? ModConfig.LanguageEnglish;
+      if (string.IsNullOrWhiteSpace(selectedLanguage)
+          || string.Equals(selectedLanguage, ModConfig.LanguageEnglish, StringComparison.OrdinalIgnoreCase))
+      {
+        return systemInstruction;
+      }
+
+      return $"{systemInstruction}\nUse {selectedLanguage} language and alphabet.";
     }
 
 
@@ -380,7 +534,7 @@ namespace UnlimitedEventExpansion
         npcCharacteristic += GetNpcCharacteristicForPrompt(name, true);
 
 
-      var system = @$"
+      var system = AppendLanguageInstruction(@$"
 You are a narrative design assistant specializing in creating dialogue scenes about a birthday party for a NPC in context of game Stardew Valley. The PLAYER and some other NPCs are attending the party. 
 Your task is to generate engaging and naturalistic conversation for the host to exchange with the PLAYER and the guests, and some among the guests as well. Not all guests need to speak. Output a structured JSON format. {GetPreferedEventLength()}
 
@@ -444,13 +598,13 @@ Style Guidelines:
  - Dialogue should feel personal, grounded, and affectionate. It should be raw sentence as how NPC will speak, do not add emotional explanations, and must not use character '\'.
  - Questions should open opportunities for meaningful roleplay or emotional responses. For Player response, give them both ways so they can make their choice.
  - Do not include any icons, comments, or extra formatting. Stay within the limit.
-";
+");
 
       var user = @$"{npcTarget} is holding a party at {locationName} to celebrate his/her birthday. Player {Game1.player.Name}, {string.Join(", ", guestNames.Skip(1).Take(4))} and more are attending.
       They are bringing {string.Join(", ", foodItems.ConvertAll(item => item.DisplayName))} to the party, along with many gifts for {npcTarget}. {(string.IsNullOrEmpty(birthdayGiftName) ? "" : $"Player {Game1.player.Name} gift for {npcTarget} this year is {birthdayGiftName}.")}";
       birthdayGiftName = "";
 
-      var responseMessage = await RequestOpenAiResponseAsync(system, user);
+      var responseMessage = await RequestAiResponseAsync(system, user);
       if (!string.IsNullOrWhiteSpace(responseMessage))
         return responseMessage;
       return string.Empty;
@@ -473,7 +627,7 @@ Style Guidelines:
       }).ToList();
 
       string npcCharacteristicMinimal = string.Join(". ", npcNames.Take(5).Select(name => GetNpcCharacteristicForPrompt(name, true)));
-      var system = @$"
+      var system = AppendLanguageInstruction(@$"
 You are a narrative design assistant specializing in creating dialogue scenes about a campfire event between the PLAYER and a group of close friends in context of game Stardew Valley. 
 Your task is to generate dialogues for the NPC to exchange with Player around the campfire. Output a structured JSON format. {GetPreferedEventLength()}
 
@@ -537,13 +691,13 @@ Style Guidelines:
  - Dialogue should feel personal, grounded, and affectionate. It should be raw sentence as how NPC will speak, do not give emotional explanations, and must not use character '\'.
  - Questions should open opportunities for meaningful roleplay or emotional responses. For Player response, give them both ways so they can make their choice.
  - Do not include any explanations, comments, or extra formatting. Stay within the limit. Only return the structured JSON.
-";
+");
 
 
       var user = @$"NPC {string.Join(", ", npcs.Split(',').Take(5).ToArray())} and Player {Game1.player.Name} is having a campfire outing together at {locationName}.
 This is some other context you can use: {data}";
 
-      var responseMessage = await RequestOpenAiResponseAsync(system, user);
+      var responseMessage = await RequestAiResponseAsync(system, user);
       if (!string.IsNullOrWhiteSpace(responseMessage))
         return responseMessage;
       return string.Empty;
@@ -594,7 +748,7 @@ This is some other context you can use: {data}";
 
       string npcCharacteristic = GetNpcCharacteristicForPrompt(npcTarget);
 
-      var system = @$"
+      var system = AppendLanguageInstruction(@$"
 You are a narrative design assistant specializing in creating dialogue scenes for a dine out event between the PLAYER and an NPC in context of game Stardew Valley. Your role is to generate engaging and naturalistic dialogue for them to exchange during the meal. Output a structured JSON format. {GetPreferedEventLength()}
 
 Your objectives:
@@ -648,13 +802,13 @@ Style Guidelines:
  - NPC name must be exactly as provided, including spaces, unique identifiers, symbols, etc.
  - Dialogue should feel personal, grounded, and affectionate. It should be raw sentence as how NPC will speak, do not include emotional explanations, and must not use character '\'.
  - Questions should open opportunities for meaningful roleplay or emotional responses. For Player response, give them both ways so they can make their choice.
- - Do not include any icons, comments, or extra formatting.";
+- Do not include any icons, comments, or extra formatting.");
 
       var user = @$"NPC {npcTarget} and Player {Game1.player.Name} is dining out together at {locationName}. Player {Game1.player.Name} having {playerDish}, and {npcTarget} having {npcDish}.
 This is some other context you can use: {summary} {data}";
 
 
-      var responseMessage = await RequestOpenAiResponseAsync(system, user);
+      var responseMessage = await RequestAiResponseAsync(system, user);
       if (!string.IsNullOrWhiteSpace(responseMessage))
         return responseMessage;
 
@@ -694,7 +848,7 @@ This is some other context you can use: {summary} {data}";
 
       string npcCharacteristic = GetNpcCharacteristicForPrompt(npcTarget);
 
-      var system = @$"
+      var system = AppendLanguageInstruction(@$"
 You are a narrative design assistant specializing in creating dialogue scenes about a picnic event between the PLAYER and an NPC in context of game Stardew Valley. Your role is to generate engaging and naturalistic dialogue for them to exchange during the picnic. Output a structured JSON format. {GetPreferedEventLength()}
 
 Your objectives:
@@ -750,12 +904,12 @@ Style Guidelines:
  - Questions should open opportunities for meaningful roleplay or emotional responses. For Player response, give them both ways so they can make their choice.
  - Do not include any icons, comments, or extra formatting.
 
-";
+");
 
       var user = @$"{npcTarget} and Player {Game1.player.Name} is going for a picnic together at {locationName}. They are bringing {string.Join(", ", foodItems.ConvertAll(item => item.DisplayName))} for the trip.
 This is some other context you can use: {summary} {data}";
 
-      var responseMessage = await RequestOpenAiResponseAsync(system, user);
+      var responseMessage = await RequestAiResponseAsync(system, user);
       if (!string.IsNullOrWhiteSpace(responseMessage))
         return responseMessage;
       return string.Empty;

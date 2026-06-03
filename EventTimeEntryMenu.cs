@@ -487,10 +487,10 @@ namespace UnlimitedEventExpansion
                 return;
             }
 
-            if (string.IsNullOrWhiteSpace(Config.OpenAIKey) && TotalEventRegisteredToday >= 1)
+            if (string.IsNullOrWhiteSpace(Config.Key) && TotalEventRegisteredToday >= 2)
             {
                 Game1.playSound("cancel");
-                iSmartPhoneApi.SendSmartphoneNotification("You can only schedule one event per day without an OpenAI key. Check out the mod page for more instructions!", "Unlimited Events Expansion");
+                iSmartPhoneApi.SendSmartphoneNotification("You can only schedule two events per day without your own API key. Check out the mod page for more instructions!", "Unlimited Events Expansion");
                 return;
             }
 

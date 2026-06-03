@@ -30,7 +30,7 @@ namespace UnlimitedEventExpansion
         );
 
         /// <summary>
-        /// Checks if the player can schedule a new event. This method is used to enforce any limitations on the number of events that can be scheduled, such as allowing only one event per day without an OpenAI key.
+        /// Checks if the player can schedule a new event. This method is used to enforce any limitations on the number of events that can be scheduled without a personal API key.
         /// </summary>
         /// <returns>True if the player can schedule a new event; otherwise, false.</returns>
         bool CanScheduleNewEvent();

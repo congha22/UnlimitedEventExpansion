@@ -39,9 +39,9 @@ namespace UnlimitedEventExpansion
 
         public bool CanScheduleNewEvent()
         {
-            if (string.IsNullOrWhiteSpace(ModEntry.Config.OpenAIKey))
+            if (string.IsNullOrWhiteSpace(ModEntry.Config.Key))
             {
-                return ModEntry.TotalEventRegisteredToday < 1;
+                return ModEntry.TotalEventRegisteredToday < 2;
             }
             return true;
         }

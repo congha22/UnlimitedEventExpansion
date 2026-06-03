@@ -18,60 +18,62 @@ namespace UnlimitedEventExpansion
             configMenu.Register(
                 mod: modManifest,
                 reset: () => Config = new ModConfig(),
-                save: () => helper.WriteConfig(Config),
-                titleScreenOnly: true
+                save: () => helper.WriteConfig(Config)
             );
 
-            configMenu.AddParagraph(
+            configMenu.AddSectionTitle(
+                            mod: modManifest,
+                            text: () => "Language"
+                        );
+
+            configMenu.AddTextOption(
                 mod: modManifest,
-                text: () => "All options in this menu require OpenAI key provided to be effective. Without a key, the mod will use a shared key with stricter limits, and the options below won't have any effect."
+                getValue: () => string.IsNullOrWhiteSpace(Config.Language) ? ModConfig.LanguageEnglish : Config.Language,
+                setValue: value => Config.Language = string.IsNullOrWhiteSpace(value) ? ModConfig.LanguageEnglish : value.Trim(),
+                name: () => "Language",
+                tooltip: () => "Language used for generated dialogue. Use English for default behavior."
             );
 
 
             configMenu.AddSectionTitle(
                 mod: modManifest,
-                text: () => "OpenAI setup"
+                text: () => "AI configuration"
             );
+
+            configMenu.AddParagraph(
+                mod: modManifest,
+                text: () => "All options below require your own API key to be effective. You still can use the mod but will have a limited usage. Return to title screen to see the options."
+            );
+
+            configMenu.SetTitleScreenOnlyForNextOptions(mod: modManifest, titleScreenOnly: true);
 
             configMenu.AddTextOption(
                 mod: modManifest,
-                getValue: () => Config?.OpenAIKey ?? "",
-                setValue: value => Config.OpenAIKey = value?.Trim() ?? "",
-                name: () => "OpenAI API key",
-                tooltip: () => "Use your own key to remove shared usage limits.\nGet one from https://platform.openai.com/account/api-keys."
+                getValue: () => Config?.Key ?? "",
+                setValue: value => Config.Key = value?.Trim() ?? "",
+                name: () => "Key",
+                tooltip: () => "OpenAI or Gemini key. See mod page for instructions how to get one.\nOpenAI keys: https://platform.openai.com/account/api-keys\nGemini keys: https://aistudio.google.com/apikey"
             );
 
             configMenu.AddTextOption(
                 mod: modManifest,
                 name: () => "Model",
-                tooltip: () => "Choose the OpenAI model to use when your own key is set.",
-                getValue: () => Config.OpenAIModel,
-                setValue: value => Config.OpenAIModel = value,
-                allowedValues: new string[]
-                {
-                    ModConfig.OpenAIModel_51,
-                    ModConfig.OpenAIModel_54mini,
-                    ModConfig.OpenAIModel_54nano,
-                    ModConfig.OpenAIModel_5mini,
-                    ModConfig.OpenAIModel_5nano
-                },
-                formatAllowedValue: FormatOpenAIModel
-            );
-
-            configMenu.AddSectionTitle(
-                mod: modManifest,
-                text: () => "Event generation"
+                tooltip: () => "Choose which model to use.\nOf course if you using OpenAI key, choose one of the OpenAI models; and vice versa for Gemini key.",
+                getValue: () => Config.Model,
+                setValue: value => Config.Model = value,
+                allowedValues: ModConfig.AllSupportedModels,
+                formatAllowedValue: FormatModel
             );
 
             configMenu.AddParagraph(
                 mod: modManifest,
-                text: () => "These options control event quality and pacing when your own OpenAI key is configured."
+                text: () => "These options control event quality and pacing."
             );
 
             configMenu.AddBoolOption(
                 mod: modManifest,
                 name: () => "Ignore heart-level requirements",
-                tooltip: () => "If enabled, events can trigger without the usual heart-level checks.\nRestart the game after changing this option.",
+                tooltip: () => "If enabled, you have access to events without the usual heart-level limits.\nRestart the game after changing this option.",
                 getValue: () => Config.AllowEarlyEvent,
                 setValue: value => Config.AllowEarlyEvent = value
             );
@@ -79,7 +81,7 @@ namespace UnlimitedEventExpansion
             configMenu.AddTextOption(
                 mod: modManifest,
                 name: () => "Event length",
-                tooltip: () => "Controls how much event dialogue is generated per heart level.",
+                tooltip: () => "Length of the event dialogue.",
                 getValue: () => Config.EventLength,
                 setValue: value => Config.EventLength = value,
                 allowedValues: new string[]
@@ -108,15 +110,18 @@ namespace UnlimitedEventExpansion
             );
         }
 
-        private static string FormatOpenAIModel(string value)
+        private static string FormatModel(string value)
         {
             return value switch
             {
-                ModConfig.OpenAIModel_51 => "GPT-5.1 (best quality, higher cost)",
-                ModConfig.OpenAIModel_5mini => "GPT-5 Mini (balanced)",
-                ModConfig.OpenAIModel_5nano => "GPT-5 Nano (lowest cost)",
-                ModConfig.OpenAIModel_54mini => "GPT-5.4 Mini (balanced, newer)",
-                ModConfig.OpenAIModel_54nano => "GPT-5.4 Nano (low cost, newer)",
+                ModConfig.ModelGpt51 => "GPT-5.1 (best quality, higher cost)",
+                ModConfig.ModelGpt5Mini => "GPT-5 Mini (balanced)",
+                ModConfig.ModelGpt5Nano => "GPT-5 Nano (lowest cost)",
+                ModConfig.ModelGpt54Mini => "GPT-5.4 Mini (balanced, newer)",
+                ModConfig.ModelGpt54Nano => "GPT-5.4 Nano (low cost, newer)",
+                ModConfig.ModelGemini35Flash => "Gemini 3.5 Flash",
+                ModConfig.ModelGemini31FlashLite => "Gemini 3.1 Flash Lite",
+                ModConfig.ModelGemini3FlashPreview => "Gemini 3 Flash Preview",
                 _ => value
             };
         }

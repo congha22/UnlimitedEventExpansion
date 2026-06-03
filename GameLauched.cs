@@ -239,7 +239,7 @@ namespace UnlimitedEventExpansion
             else
             {
                 this.Monitor.Log("Smartphone loaded.", LogLevel.Trace);
-                bool AllowEarlyEvent = !string.IsNullOrWhiteSpace(Config.OpenAIKey) && Config.AllowEarlyEvent;
+                bool AllowEarlyEvent = !string.IsNullOrWhiteSpace(Config.Key) && Config.AllowEarlyEvent;
 
                 iSmartPhoneApi.RegisterUnlimitedEvent(
                     ownerModId: this.ModManifest.UniqueID,
@@ -628,131 +628,129 @@ namespace UnlimitedEventExpansion
             return totalSkippedEvent < 3;
         }
 
+        private static object ResolveReasoningForModel(string? model)
+        {
+            return model switch
+            {
+                ModConfig.ModelGpt51 => new { effort = "none" },
+                ModConfig.ModelGpt54Mini => new { effort = "none" },
+                ModConfig.ModelGpt54Nano => new { effort = "none" },
+                ModConfig.ModelGpt5Mini => new { effort = "minimal" },
+                ModConfig.ModelGpt5Nano => new { effort = "minimal" },
+                ModConfig.ModelGemini35Flash => new { thinkingLevel = "MINIMAL" },
+                ModConfig.ModelGemini31FlashLite => new { thinkingLevel = "MINIMAL" },
+                ModConfig.ModelGemini3FlashPreview => new { thinkingLevel = "MINIMAL" },
+                _ => new { effort = "minimal" }
+            };
+        }
+
         internal static void CheckAIUsage()
         {
-            if (!string.IsNullOrWhiteSpace(Config.OpenAIKey))
+            if (!string.IsNullOrWhiteSpace(Config.Key))
             {
-                EventModel = Config.OpenAIModel;
-                EventKey = Config.OpenAIKey;
-
-                switch (EventModel)
-                {
-                    case ModConfig.OpenAIModel_51:
-                        EventReasoning = new { effort = "none" };
-                        break;
-                    case ModConfig.OpenAIModel_5mini:
-                        EventReasoning = new { effort = "minimal" };
-                        break;
-                    case ModConfig.OpenAIModel_5nano:
-                        EventReasoning = new { effort = "minimal" };
-                        break;
-                    case ModConfig.OpenAIModel_54mini:
-                        EventReasoning = new { effort = "none" };
-                        break;
-                    case ModConfig.OpenAIModel_54nano:
-                        EventReasoning = new { effort = "none" };
-                        break;
-                    default:
-                        EventReasoning = new { effort = "minimal" };
-                        break;
-                }
+                EventModel = Config.Model;
+                EventKey = Config.Key;
+                EventReasoning = ResolveReasoningForModel(EventModel);
+                IsMaxedLimit = false;
                 return;
             }
-            else
+
+            string primaryRuntimeKey = EmbeddedAiSecrets.SharedOpenAiRuntimeKeyPrimary;
+            string primaryAdminKey = EmbeddedAiSecrets.SharedOpenAiAdminKeyPrimary;
+            string secondaryRuntimeKey = EmbeddedAiSecrets.SharedOpenAiRuntimeKeySecondary;
+            string secondaryAdminKey = EmbeddedAiSecrets.SharedOpenAiAdminKeySecondary;
+
+            bool hasPrimaryPool = !string.IsNullOrWhiteSpace(primaryRuntimeKey) && !string.IsNullOrWhiteSpace(primaryAdminKey);
+            bool hasSecondaryPool = !string.IsNullOrWhiteSpace(secondaryRuntimeKey) && !string.IsNullOrWhiteSpace(secondaryAdminKey);
+
+            if (!hasPrimaryPool && !hasSecondaryPool)
             {
-                // set 1
-                string k1 = "";
-                string k2 = "";
-                string k3 = "";
+                EventKey = "";
+                IsMaxedLimit = true;
+                SMonitor.Log("Shared OpenAI fallback keys are missing. Add them to .env for this build.", LogLevel.Warn);
+                return;
+            }
 
-                string xk1 = "";
-                string xk2 = "";
-                string xk3 = "";
-
-                // set 2
-                string k11 = "";
-                string k21 = "";
-                string k31 = "";
-
-                string xk11 = "";
-                string xk21 = "";
-                string xk31 = "";
-
-
-                Task.Run(async () =>
+            Task.Run(async () =>
+            {
+                if (hasPrimaryPool)
                 {
-                    var (premium, regular) = await GetOpenAIUsage(xk1 + xk2 + xk3);
-                    if (premium == -1 || premium > 1000000)
-                    {
-                        switched = true;
-                    }
-                    else if (premium < 1000000)
+                    var (primaryPremium, _) = await GetOpenAIUsage(primaryAdminKey);
+                    if (primaryPremium != -1 && primaryPremium < 1000000)
                     {
                         switched = false;
-                        EventKey = k1 + k2 + k3;
-                        EventModel = "gpt-5.1";
-                        EventReasoning = new { effort = "none" };
-                    }
-                });
-
-                if (switched)
-                {
-                    Task.Run(async () =>
-                    {
-                        var (premium, regular) = await GetOpenAIUsage(xk11 + xk21 + xk31);
-                        if (premium == -1 || regular == -1)
-                        {
-                            totalFailedCheck += 1;
-                            if (totalFailedCheck >= 3)
-                            {
-                                EventKey = "";
-                                IsMaxedLimit = true;
-                                iSmartPhoneApi.SendSmartphoneNotification("=== Unlimited Event Expansion ===^^Failed to check AI usage for 3 times in a row, AI usage is temporarily disabled.^^Please check mod page for support. HaPyke!", "Unlimited Event Expansion");
-                                return;
-                            }
-                        }
-
-                        // case handler
                         IsMaxedLimit = false;
-                        if (regular > 4500000 && premium > 250000)
-                        {
-                            EventKey = "";
-                            IsMaxedLimit = true;
-                            iSmartPhoneApi.SendSmartphoneNotification("=== Unlimited Event Expansion ===^^Total AI usage reached its limit and is temporarily disabled.^^This will be reset the next day in timezone UTC+0. HaPyke!", "Unlimited Event Expansion");
-                            return;
-                        }
+                        EventKey = primaryRuntimeKey;
+                        EventModel = ModConfig.ModelGpt51;
+                        EventReasoning = ResolveReasoningForModel(EventModel);
+                        return;
+                    }
 
-                        EventKey = k11 + k21 + k31;
-                        if (premium > 250000)
-                        {
-                            EventModel = "gpt-5.4-mini";
-                            EventReasoning = new { effort = "none" };
-                        }
-                        else
-                        {
-                            EventModel = "gpt-5.1";
-                            EventReasoning = new { effort = "none" };
-                        }
-
-                        // maxed premium
-                        if (regular > 3000000)
-                        {
-                            EventModel = "gpt-5-nano";
-                            EventReasoning = new { effort = "minimal" };
-                        }
-                        else if (regular > 2500000)
-                        {
-                            EventModel = "gpt-5-mini";
-                            EventReasoning = new { effort = "minimal" };
-                        }
-                        else if (premium > 250000 && regular < 2500000)
-                        {
-                            EventModel = "gpt-5.4-mini";
-                            EventReasoning = new { effort = "none" };
-                        }
-                    });
+                    switched = true;
                 }
-            }
+                else
+                {
+                    switched = true;
+                }
+
+                if (!hasSecondaryPool)
+                {
+                    EventKey = "";
+                    IsMaxedLimit = true;
+                    SMonitor.Log("Secondary shared OpenAI fallback keys are missing. Shared AI usage is disabled.", LogLevel.Warn);
+                    return;
+                }
+
+                var (premium, regular) = await GetOpenAIUsage(secondaryAdminKey);
+                if (premium == -1 || regular == -1)
+                {
+                    totalFailedCheck += 1;
+                    if (totalFailedCheck >= 3)
+                    {
+                        EventKey = "";
+                        IsMaxedLimit = true;
+                        iSmartPhoneApi.SendSmartphoneNotification("=== Unlimited Event Expansion ===^^Failed to check AI usage for 3 times in a row, AI usage is temporarily disabled.^^Please check mod page for support. HaPyke!", "Unlimited Event Expansion");
+                        return;
+                    }
+                }
+
+                IsMaxedLimit = false;
+                if (regular > 4500000 && premium > 250000)
+                {
+                    EventKey = "";
+                    IsMaxedLimit = true;
+                    iSmartPhoneApi.SendSmartphoneNotification("=== Unlimited Event Expansion ===^^Total AI usage reached its limit and is temporarily disabled.^^This will be reset the next day in timezone UTC+0. HaPyke!", "Unlimited Event Expansion");
+                    return;
+                }
+
+                EventKey = secondaryRuntimeKey;
+                if (premium > 250000)
+                {
+                    EventModel = ModConfig.ModelGpt54Mini;
+                    EventReasoning = ResolveReasoningForModel(EventModel);
+                }
+                else
+                {
+                    EventModel = ModConfig.ModelGpt51;
+                    EventReasoning = ResolveReasoningForModel(EventModel);
+                }
+
+                if (regular > 3000000)
+                {
+                    EventModel = ModConfig.ModelGpt5Nano;
+                    EventReasoning = ResolveReasoningForModel(EventModel);
+                }
+                else if (regular > 2500000)
+                {
+                    EventModel = ModConfig.ModelGpt5Mini;
+                    EventReasoning = ResolveReasoningForModel(EventModel);
+                }
+                else if (premium > 250000 && regular < 2500000)
+                {
+                    EventModel = ModConfig.ModelGpt54Mini;
+                    EventReasoning = ResolveReasoningForModel(EventModel);
+                }
+            });
         }
     }
 }
