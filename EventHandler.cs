@@ -150,7 +150,7 @@ namespace UnlimitedEventExpansion
 
         }
 
-        public static void TriggerNpcBirthdayEvent(string npcTarget)
+        public static void TriggerNpcBirthdayEvent(string npcTarget, string? selectedLocation = null, List<string>? selectedParticipantNames = null)
         {
             if (Game1.eventUp || Game1.getCharacterFromName(npcTarget) == null || !CanTriggerEvent())
                 return;
@@ -186,7 +186,19 @@ namespace UnlimitedEventExpansion
             async Task BirthdayEventTask()
             {
                 Random random = new Random();
-                BirthdayMapData data = GetBirthdayMapDataForNPC(npc);
+                BirthdayMapData data;
+                if (!string.IsNullOrWhiteSpace(selectedLocation)
+                    && birthdayMap.TryGetValue(selectedLocation, out BirthdayMapData selectedData)
+                    && selectedData != null
+                    && Game1.getLocationFromName(selectedData.event_map) != null)
+                {
+                    data = selectedData;
+                }
+                else
+                {
+                    data = GetBirthdayMapDataForNPC(npc);
+                }
+
                 var event_map = data.event_map;
                 var npc_tiles = data.npc_tiles;
                 var gift_tiles = data.gift_tiles;
@@ -208,22 +220,43 @@ namespace UnlimitedEventExpansion
                         )
                     .ToList();
 
-                List<NPC> requiredVisitors = eligibleNPCs
-                    .Where(npc => requiredNpcNames.Contains(npc.Name) && npc.Name != npcTarget)
-                    .ToList();
+                bool hasManualSelection = selectedParticipantNames != null && selectedParticipantNames.Any();
+                List<NPC> visitor;
+                if (hasManualSelection)
+                {
+                    HashSet<string> desiredNames = new HashSet<string>(selectedParticipantNames.Where(name => !string.IsNullOrWhiteSpace(name)).Select(name => name.Trim()), StringComparer.OrdinalIgnoreCase);
+                    foreach (string requiredName in requiredNpcNames)
+                    {
+                        if (!string.IsNullOrWhiteSpace(requiredName))
+                            desiredNames.Add(requiredName.Trim());
+                    }
 
-                List<NPC> pool = eligibleNPCs
-                    .Where(npc => !requiredVisitors.Contains(npc) && npc.Name != npcTarget)
-                    .ToList();
+                    desiredNames.RemoveWhere(name => string.Equals(name, npcTarget, StringComparison.OrdinalIgnoreCase));
+                    visitor = allVillagers
+                        .Where(candidate => desiredNames.Contains(candidate.Name))
+                        .GroupBy(candidate => candidate.Name, StringComparer.OrdinalIgnoreCase)
+                        .Select(group => group.First())
+                        .Take(npc_tiles.Count)
+                        .ToList();
+                }
+                else
+                {
+                    List<NPC> requiredVisitors = eligibleNPCs
+                        .Where(candidate => requiredNpcNames.Contains(candidate.Name) && candidate.Name != npcTarget)
+                        .ToList();
 
-                int remainingSlots = npc_tiles.Count - requiredVisitors.Count;
+                    List<NPC> pool = eligibleNPCs
+                        .Where(candidate => !requiredVisitors.Contains(candidate) && candidate.Name != npcTarget)
+                        .ToList();
 
-                List<NPC> randomVisitors = pool
-                    .OrderBy(npc => random.Next())
-                    .Take(remainingSlots)
-                    .ToList();
+                    int remainingSlots = npc_tiles.Count - requiredVisitors.Count;
+                    List<NPC> randomVisitors = pool
+                        .OrderBy(candidate => random.Next())
+                        .Take(remainingSlots)
+                        .ToList();
 
-                List<NPC> visitor = requiredVisitors.Concat(randomVisitors).ToList();
+                    visitor = requiredVisitors.Concat(randomVisitors).ToList();
+                }
 
 
                 Shuffle(npc_tiles);
@@ -387,12 +420,20 @@ namespace UnlimitedEventExpansion
 
         }
 
-        public static void TriggerPicnicEvent(string npcTarget)
+        public static void TriggerPicnicEvent(string npcTarget, string? selectedLocation = null, List<string>? selectedParticipantNames = null)
         {
             if (Game1.eventUp || Game1.getCharacterFromName(npcTarget) == null || !CanTriggerEvent())
                 return;
 
             string event_map = null;
+
+            if (!string.IsNullOrWhiteSpace(selectedLocation)
+                && picnicMap.TryGetValue(selectedLocation, out PicnicMapData selectedPicnicData)
+                && selectedPicnicData != null
+                && Game1.getLocationFromName(selectedLocation) != null)
+            {
+                event_map = selectedLocation;
+            }
 
             List<string> keys = picnicMap.Keys.ToList();
             while (event_map == null && keys.Count > 0)
@@ -548,11 +589,19 @@ namespace UnlimitedEventExpansion
 
         }
 
-        public static void TriggerCampingEvent(string npcTarget)
+        public static void TriggerCampingEvent(string npcTarget, string? selectedLocation = null, List<string>? selectedParticipantNames = null)
         {
             if (Game1.eventUp || Game1.getCharacterFromName(npcTarget) == null || !CanTriggerEvent())
                 return;
             string event_map = null;
+
+            if (!string.IsNullOrWhiteSpace(selectedLocation)
+                && campfireMap.TryGetValue(selectedLocation, out CampfireMapData selectedCampfireData)
+                && selectedCampfireData != null
+                && Game1.getLocationFromName(selectedLocation) != null)
+            {
+                event_map = selectedLocation;
+            }
 
             List<string> keys = campfireMap.Keys.ToList();
             while (event_map == null && keys.Count > 0)
@@ -595,33 +644,49 @@ namespace UnlimitedEventExpansion
 
             // npc
             List<NPC> allVillagers = Utility.getAllVillagers().ToList();
+            List<NPC> guests;
+            bool hasManualSelection = selectedParticipantNames != null && selectedParticipantNames.Any();
+            if (hasManualSelection)
+            {
+                HashSet<string> desiredNames = new HashSet<string>(selectedParticipantNames.Where(name => !string.IsNullOrWhiteSpace(name)).Select(name => name.Trim()), StringComparer.OrdinalIgnoreCase);
+                desiredNames.Add(npcTarget);
 
-            var eligibleNPCs = allVillagers
-                .Where(npc =>
-                    !socialNpcBlacklist.Contains(npc.Name) &&
-                    !npc.IsInvisible &&
-                    npc.CanSocialize &&
-                    Game1.player.friendshipData.TryGetValue(npc.Name, out var data) &&
-                    data.Points >= 250
-                )
-                .ToList();
+                guests = allVillagers
+                    .Where(candidate => desiredNames.Contains(candidate.Name))
+                    .GroupBy(candidate => candidate.Name, StringComparer.OrdinalIgnoreCase)
+                    .Select(group => group.First())
+                    .Take(npc_tiles.Count)
+                    .ToList();
+            }
+            else
+            {
+                var eligibleNPCs = allVillagers
+                    .Where(candidate =>
+                        !socialNpcBlacklist.Contains(candidate.Name) &&
+                        !candidate.IsInvisible &&
+                        candidate.CanSocialize &&
+                        Game1.player.friendshipData.TryGetValue(candidate.Name, out var friendshipData) &&
+                        friendshipData.Points >= 250
+                    )
+                    .ToList();
 
-            NPC requiredGuest = Game1.getCharacterFromName(npcTarget);
-            if (requiredGuest is null)
-                return;
+                NPC requiredGuest = Game1.getCharacterFromName(npcTarget);
+                if (requiredGuest is null)
+                    return;
 
-            eligibleNPCs.Remove(requiredGuest);
+                eligibleNPCs.Remove(requiredGuest);
 
-            int maxGuests = (int)(npc_tiles.Count * 1);
-            int remainingSlots = Math.Max(0, maxGuests - 1);
+                int maxGuests = npc_tiles.Count;
+                int remainingSlots = Math.Max(0, maxGuests - 1);
 
-            List<NPC> randomGuests = eligibleNPCs
-                .OrderBy(_ => Game1.random.Next())
-                .Take(remainingSlots)
-                .ToList();
+                List<NPC> randomGuests = eligibleNPCs
+                    .OrderBy(_ => Game1.random.Next())
+                    .Take(remainingSlots)
+                    .ToList();
 
-            List<NPC> guests = new() { requiredGuest };
-            guests.AddRange(randomGuests);
+                guests = new List<NPC> { requiredGuest };
+                guests.AddRange(randomGuests);
+            }
 
             Shuffle(npc_tiles);
             string guestTile = string.Join(" ", guests.Zip(npc_tiles, (npc, tile) =>

@@ -41,7 +41,7 @@ namespace UnlimitedEventExpansion
         {
             if (string.IsNullOrWhiteSpace(ModEntry.Config.Key))
             {
-                return ModEntry.TotalEventRegisteredToday < 2;
+                return ModEntry.TotalEventRegisteredToday < ModEntry.DailyEventLimit;
             }
             return true;
         }
@@ -57,7 +57,16 @@ namespace UnlimitedEventExpansion
         public static ModConfig Config;
         public static IModHelper SHelper;
         public static ISmartPhoneApi iSmartPhoneApi;
-        public static List<(string NpcName, string EventType, string TimeOfDay)> PendingUnlimitedEvents = new();
+        public sealed class ScheduledUnlimitedEvent
+        {
+            public string NpcName { get; set; } = string.Empty;
+            public string EventType { get; set; } = string.Empty;
+            public string TimeOfDay { get; set; } = string.Empty;
+            public string? LocationName { get; set; }
+            public List<string> ParticipantNames { get; set; } = new();
+        }
+
+        public static List<ScheduledUnlimitedEvent> PendingUnlimitedEvents = new();
         public static int TotalEventRegisteredToday = 0;
 
 
@@ -74,6 +83,8 @@ namespace UnlimitedEventExpansion
         public static string birthdayGiftName = "";
 
         public static int totalSkippedEvent = 0;
+
+        public static int DailyEventLimit = 4;
 
 
         private static readonly object queuedEventStartsLock = new();

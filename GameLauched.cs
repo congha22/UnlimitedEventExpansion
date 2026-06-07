@@ -474,13 +474,13 @@ namespace UnlimitedEventExpansion
                         switch (eventType.ToLower())
                         {
                             case "birthday":
-                                TriggerNpcBirthdayEvent(npcName);
+                                TriggerNpcBirthdayEvent(npcName, scheduledEvent.LocationName, scheduledEvent.ParticipantNames);
                                 break;
                             case "campfire":
-                                TriggerCampingEvent(npcName);
+                                TriggerCampingEvent(npcName, scheduledEvent.LocationName, scheduledEvent.ParticipantNames);
                                 break;
                             case "picnic":
-                                TriggerPicnicEvent(npcName);
+                                TriggerPicnicEvent(npcName, scheduledEvent.LocationName, scheduledEvent.ParticipantNames);
                                 break;
                             case "dine out":
                                 TriggerDineOutEvent(npcName);

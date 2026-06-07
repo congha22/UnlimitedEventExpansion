@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
@@ -30,8 +31,9 @@ namespace UnlimitedEventExpansion
             private readonly Rectangle textBoxBounds;
             private readonly Rectangle minusButtonBounds;
             private readonly Rectangle plusButtonBounds;
-            private readonly Rectangle okButtonBounds;
+            private readonly Rectangle primaryActionButtonBounds;
             private readonly Rectangle cancelButtonBounds;
+            private readonly string primaryActionLabel;
 
             private string validationMessage = string.Empty;
             private bool controllerCursorOverrideApplied;
@@ -42,19 +44,22 @@ namespace UnlimitedEventExpansion
                 string npcDisplayName,
                 string eventDisplayName,
                 Action<string> onConfirm,
-                Action onCancel)
-                : base(Game1.uiViewport.Width / 2 - 260, Game1.uiViewport.Height / 2 - 170, 520, 340, showUpperRightCloseButton: false)
+                Action onCancel,
+                string? initialTimeText = null,
+                string? primaryActionLabel = null)
+                : base(Game1.uiViewport.Width / 2 - 320, Game1.uiViewport.Height / 2 - 210, 640, 420, showUpperRightCloseButton: false)
             {
                 this.onConfirm = onConfirm ?? (_ => { });
                 this.onCancel = onCancel ?? (() => { });
                 this.npcDisplayName = string.IsNullOrWhiteSpace(npcDisplayName) ? "NPC" : npcDisplayName;
                 this.eventDisplayName = string.IsNullOrWhiteSpace(eventDisplayName) ? "event" : eventDisplayName;
+                this.primaryActionLabel = string.IsNullOrWhiteSpace(primaryActionLabel) ? "Confirm" : primaryActionLabel;
 
-                textBoxBounds = new Rectangle(xPositionOnScreen + 105, yPositionOnScreen + 150, 200, 48);
-                minusButtonBounds = new Rectangle(xPositionOnScreen + 45, yPositionOnScreen + 150, 48, 48);
-                plusButtonBounds = new Rectangle(xPositionOnScreen + 317, yPositionOnScreen + 150, 48, 48);
-                okButtonBounds = new Rectangle(xPositionOnScreen + 105, yPositionOnScreen + 245, 120, 56);
-                cancelButtonBounds = new Rectangle(xPositionOnScreen + 245, yPositionOnScreen + 245, 120, 56);
+                textBoxBounds = new Rectangle(xPositionOnScreen + 170, yPositionOnScreen + 198, 220, 56);
+                minusButtonBounds = new Rectangle(xPositionOnScreen + 106, yPositionOnScreen + 202, 52, 52);
+                plusButtonBounds = new Rectangle(xPositionOnScreen + 402, yPositionOnScreen + 202, 52, 52);
+                cancelButtonBounds = new Rectangle(xPositionOnScreen + 58, yPositionOnScreen + height - 88, 130, 56);
+                primaryActionButtonBounds = new Rectangle(xPositionOnScreen + width - 188, yPositionOnScreen + height - 88, 130, 56);
 
                 timeTextBox = new TextBox(
                     Game1.content.Load<Texture2D>("LooseSprites\\textBox"),
@@ -66,7 +71,7 @@ namespace UnlimitedEventExpansion
                     Y = textBoxBounds.Y,
                     Width = textBoxBounds.Width,
                     Height = textBoxBounds.Height,
-                    Text = BuildDefaultSuggestedTime()
+                    Text = string.IsNullOrWhiteSpace(initialTimeText) ? BuildDefaultSuggestedTime() : initialTimeText
                 };
                 timeTextBox.textLimit = 5;
                 timeTextBox.Selected = true;
@@ -97,7 +102,7 @@ namespace UnlimitedEventExpansion
 
             public override void receiveLeftClick(int x, int y, bool playSound = true)
             {
-                if (okButtonBounds.Contains(x, y))
+                if (primaryActionButtonBounds.Contains(x, y))
                 {
                     TrySubmit();
                     return;
@@ -175,14 +180,14 @@ namespace UnlimitedEventExpansion
 
                 string title = $"Schedule {eventDisplayName} with {npcDisplayName}";
                 Vector2 titleSize = Game1.dialogueFont.MeasureString(title);
-                Vector2 titlePosition = new Vector2(xPositionOnScreen + (width - titleSize.X) / 2f, yPositionOnScreen + 48f);
+                Vector2 titlePosition = new Vector2(xPositionOnScreen + (width - titleSize.X) / 2f, yPositionOnScreen + 96f);
                 Utility.drawTextWithShadow(b, title, Game1.dialogueFont, titlePosition, Game1.textColor);
                 TryGetMinimumAllowedEventTime(out string minimumAllowedPreview);
                 Utility.drawTextWithShadow(
                     b,
                     $"Enter HHMM ({FormatEventTimeForDisplay(minimumAllowedPreview)} - 23:00)",
                     Game1.smallFont,
-                    new Vector2(xPositionOnScreen + 45, yPositionOnScreen + 108),
+                    new Vector2(xPositionOnScreen + 58, yPositionOnScreen + 152),
                     Game1.textColor);
 
                 DrawButton(b, minusButtonBounds, "-", new Color(235, 235, 235));
@@ -208,7 +213,7 @@ namespace UnlimitedEventExpansion
                         b,
                         $"Selected: {FormatEventTimeForDisplay(normalizedPreviewTime)}",
                         Game1.smallFont,
-                        new Vector2(xPositionOnScreen + 45, yPositionOnScreen + 212),
+                        new Vector2(xPositionOnScreen + 58, yPositionOnScreen + 278),
                         Game1.textColor);
                 }
                 else
@@ -221,7 +226,7 @@ namespace UnlimitedEventExpansion
                             b,
                             TimeSlotUnavailableMessage,
                             Game1.smallFont,
-                            new Vector2(xPositionOnScreen + 45, yPositionOnScreen + 212),
+                            new Vector2(xPositionOnScreen + 58, yPositionOnScreen + 278),
                             Color.IndianRed);
                     }
                     else
@@ -230,7 +235,7 @@ namespace UnlimitedEventExpansion
                         b,
                         "Selected: Invalid time",
                         Game1.smallFont,
-                        new Vector2(xPositionOnScreen + 45, yPositionOnScreen + 212),
+                        new Vector2(xPositionOnScreen + 58, yPositionOnScreen + 278),
                         Color.IndianRed);
                     }
                 }
@@ -241,11 +246,11 @@ namespace UnlimitedEventExpansion
                         b,
                         TooLateToScheduleMessage,
                         Game1.smallFont,
-                        new Vector2(xPositionOnScreen + 45, yPositionOnScreen + 228),
+                        new Vector2(xPositionOnScreen + 58, yPositionOnScreen + 298),
                         Color.IndianRed);
                 }
 
-                DrawButton(b, okButtonBounds, "OK", new Color(196, 236, 196));
+                DrawButton(b, primaryActionButtonBounds, primaryActionLabel, new Color(196, 236, 196));
                 DrawButton(b, cancelButtonBounds, "Cancel", new Color(242, 218, 218));
 
                 if (!string.IsNullOrWhiteSpace(validationMessage))
@@ -254,7 +259,7 @@ namespace UnlimitedEventExpansion
                         b,
                         validationMessage,
                         Game1.smallFont,
-                        new Vector2(xPositionOnScreen + 45, yPositionOnScreen + 305),
+                        new Vector2(xPositionOnScreen + 58, yPositionOnScreen + height - 112),
                         Color.IndianRed);
                 }
 
@@ -467,7 +472,912 @@ namespace UnlimitedEventExpansion
 
         }
 
+        private sealed class EventLocationOption
+        {
+            public string Key { get; set; } = string.Empty;
+            public string DisplayName { get; set; } = string.Empty;
+            public int MaxParticipants { get; set; }
+            public List<string> RequiredNpcNames { get; set; } = new();
+        }
 
+        private sealed class EventNpcSelectionInfo
+        {
+            public List<string> AllNames { get; set; } = new();
+            public HashSet<string> LockedNames { get; } = new(StringComparer.OrdinalIgnoreCase);
+            public int OptionalLimit { get; set; }
+        }
+
+        private sealed class EventLocationSelectionMenu : IClickableMenu
+        {
+            private readonly Action<string> onNext;
+            private readonly Action onBack;
+            private readonly Action onCancel;
+            private readonly string npcDisplayName;
+            private readonly string eventDisplayName;
+            private readonly List<EventLocationOption> options;
+
+            private readonly Rectangle listBounds;
+            private readonly Rectangle backButtonBounds;
+            private readonly Rectangle nextButtonBounds;
+            private readonly Rectangle cancelButtonBounds;
+            private readonly Rectangle upButtonBounds;
+            private readonly Rectangle downButtonBounds;
+
+            private readonly int rowHeight = 56;
+            private readonly int visibleRows = 6;
+
+            private int selectedIndex;
+            private int scrollIndex;
+            private string validationMessage = string.Empty;
+
+            public EventLocationSelectionMenu(
+                string npcDisplayName,
+                string eventDisplayName,
+                List<EventLocationOption> options,
+                string? selectedLocationKey,
+                Action<string> onNext,
+                Action onBack,
+                Action onCancel)
+                : base(Game1.uiViewport.Width / 2 - 380, Game1.uiViewport.Height / 2 - 290, 760, 580, showUpperRightCloseButton: false)
+            {
+                this.npcDisplayName = string.IsNullOrWhiteSpace(npcDisplayName) ? "NPC" : npcDisplayName;
+                this.eventDisplayName = string.IsNullOrWhiteSpace(eventDisplayName) ? "event" : eventDisplayName;
+                this.options = options ?? new List<EventLocationOption>();
+                this.onNext = onNext ?? (_ => { });
+                this.onBack = onBack ?? (() => { });
+                this.onCancel = onCancel ?? (() => { });
+
+                listBounds = new Rectangle(xPositionOnScreen + 58, yPositionOnScreen + 180, width - 150, 360);
+                cancelButtonBounds = new Rectangle(xPositionOnScreen + 58, yPositionOnScreen + height - 82 + 60, 130, 52);
+                backButtonBounds = new Rectangle(xPositionOnScreen + width - 328, yPositionOnScreen + height - 82 + 60, 130, 52);
+                nextButtonBounds = new Rectangle(xPositionOnScreen + width - 178, yPositionOnScreen + height - 82 + 60, 130, 52);
+                upButtonBounds = new Rectangle(listBounds.Right + 10, listBounds.Y, 30, 30);
+                downButtonBounds = new Rectangle(listBounds.Right + 10, listBounds.Bottom - 30, 30, 30);
+
+                selectedIndex = -1;
+                if (!string.IsNullOrWhiteSpace(selectedLocationKey))
+                {
+                    int existingIndex = this.options.FindIndex(option => string.Equals(option.Key, selectedLocationKey, StringComparison.OrdinalIgnoreCase));
+                    if (existingIndex >= 0)
+                        selectedIndex = existingIndex;
+                }
+
+                if (selectedIndex >= 0)
+                    EnsureSelectionVisible();
+            }
+
+            public override void receiveScrollWheelAction(int direction)
+            {
+                if (direction > 0)
+                    scrollIndex = Math.Max(0, scrollIndex - 1);
+                else if (direction < 0)
+                    scrollIndex = Math.Min(Math.Max(0, options.Count - visibleRows), scrollIndex + 1);
+            }
+
+            public override void receiveLeftClick(int x, int y, bool playSound = true)
+            {
+                if (cancelButtonBounds.Contains(x, y))
+                {
+                    Game1.playSound("bigDeSelect");
+                    onCancel();
+                    return;
+                }
+
+                if (backButtonBounds.Contains(x, y))
+                {
+                    Game1.playSound("smallSelect");
+                    onBack();
+                    return;
+                }
+
+                if (nextButtonBounds.Contains(x, y))
+                {
+                    TryContinue();
+                    return;
+                }
+
+                if (upButtonBounds.Contains(x, y))
+                {
+                    scrollIndex = Math.Max(0, scrollIndex - 1);
+                    return;
+                }
+
+                if (downButtonBounds.Contains(x, y))
+                {
+                    scrollIndex = Math.Min(Math.Max(0, options.Count - visibleRows), scrollIndex + 1);
+                    return;
+                }
+
+                for (int row = 0; row < visibleRows; row++)
+                {
+                    int optionIndex = scrollIndex + row;
+                    if (optionIndex >= options.Count)
+                        break;
+
+                    Rectangle rowBounds = GetRowBounds(row);
+                    if (!rowBounds.Contains(x, y))
+                        continue;
+
+                    selectedIndex = optionIndex;
+                    validationMessage = string.Empty;
+                    Game1.playSound("smallSelect");
+                    return;
+                }
+            }
+
+            public override void receiveKeyPress(Keys key)
+            {
+                if (key == Keys.Escape)
+                {
+                    Game1.playSound("bigDeSelect");
+                    onCancel();
+                    return;
+                }
+
+                if (key == Keys.Enter)
+                {
+                    TryContinue();
+                    return;
+                }
+
+                if (key == Keys.Up)
+                {
+                    selectedIndex = selectedIndex < 0 ? 0 : Math.Max(0, selectedIndex - 1);
+                    EnsureSelectionVisible();
+                    return;
+                }
+
+                if (key == Keys.Down)
+                {
+                    selectedIndex = selectedIndex < 0 ? 0 : Math.Min(options.Count - 1, selectedIndex + 1);
+                    EnsureSelectionVisible();
+                    return;
+                }
+
+                base.receiveKeyPress(key);
+            }
+
+            public override void draw(SpriteBatch b)
+            {
+                Game1.drawDialogueBox(xPositionOnScreen, yPositionOnScreen, width, height, false, true);
+
+                string title = $"Pick {eventDisplayName} location ({npcDisplayName})";
+                Vector2 titleSize = Game1.dialogueFont.MeasureString(title);
+                Utility.drawTextWithShadow(
+                    b,
+                    title,
+                    Game1.dialogueFont,
+                    new Vector2(xPositionOnScreen + (width - titleSize.X) / 2f, yPositionOnScreen + 92f),
+                    Game1.textColor);
+
+                Utility.drawTextWithShadow(
+                    b,
+                    "Select one location.",
+                    Game1.smallFont,
+                    new Vector2(xPositionOnScreen + 58, yPositionOnScreen + 132),
+                    Game1.textColor);
+
+                IClickableMenu.drawTextureBox(
+                    b,
+                    Game1.menuTexture,
+                    new Rectangle(0, 256, 60, 60),
+                    listBounds.X,
+                    listBounds.Y,
+                    listBounds.Width,
+                    listBounds.Height,
+                    Color.White,
+                    1f,
+                    false);
+
+                for (int row = 0; row < visibleRows; row++)
+                {
+                    int optionIndex = scrollIndex + row;
+                    if (optionIndex >= options.Count)
+                        break;
+
+                    EventLocationOption option = options[optionIndex];
+                    Rectangle rowBounds = GetRowBounds(row);
+                    bool isSelected = optionIndex == selectedIndex;
+
+                    IClickableMenu.drawTextureBox(
+                        b,
+                        Game1.menuTexture,
+                        new Rectangle(0, 256, 60, 60),
+                        rowBounds.X,
+                        rowBounds.Y,
+                        rowBounds.Width,
+                        rowBounds.Height,
+                        isSelected ? new Color(213, 236, 255) : new Color(245, 245, 245),
+                        1f,
+                        false);
+
+                    Utility.drawTextWithShadow(
+                        b,
+                        option.DisplayName,
+                        Game1.smallFont,
+                        new Vector2(rowBounds.X + 12, rowBounds.Y + 10),
+                        Game1.textColor);
+                }
+
+                if (options.Count > visibleRows)
+                {
+                    DrawSimpleButton(b, upButtonBounds, "^", new Color(232, 232, 232));
+                    DrawSimpleButton(b, downButtonBounds, "v", new Color(232, 232, 232));
+                }
+
+                DrawSimpleButton(b, cancelButtonBounds, "Cancel", new Color(242, 218, 218));
+                DrawSimpleButton(b, backButtonBounds, "Back", new Color(225, 225, 225));
+                DrawSimpleButton(b, nextButtonBounds, "Next", new Color(196, 236, 196));
+
+                if (!string.IsNullOrWhiteSpace(validationMessage))
+                {
+                    Utility.drawTextWithShadow(
+                        b,
+                        validationMessage,
+                        Game1.smallFont,
+                        new Vector2(xPositionOnScreen + 58, yPositionOnScreen + height - 108),
+                        Color.IndianRed);
+                }
+
+                drawMouse(b);
+            }
+
+            private Rectangle GetRowBounds(int row)
+            {
+                return new Rectangle(
+                    listBounds.X + 8,
+                    listBounds.Y + 8 + (row * rowHeight),
+                    listBounds.Width - 16,
+                    rowHeight - 4);
+            }
+
+            private void EnsureSelectionVisible()
+            {
+                if (selectedIndex < scrollIndex)
+                    scrollIndex = selectedIndex;
+
+                if (selectedIndex >= scrollIndex + visibleRows)
+                    scrollIndex = selectedIndex - visibleRows + 1;
+            }
+
+            private void TryContinue()
+            {
+                if (selectedIndex < 0 || selectedIndex >= options.Count)
+                {
+                    validationMessage = "Select a location before continuing.";
+                    Game1.playSound("cancel");
+                    return;
+                }
+
+                Game1.playSound("smallSelect");
+                onNext(options[selectedIndex].Key);
+            }
+        }
+
+        private sealed class EventNpcSelectionMenu : IClickableMenu
+        {
+            private readonly Action<List<string>> onConfirm;
+            private readonly Action onBack;
+            private readonly Action onCancel;
+            private readonly string npcDisplayName;
+            private readonly string eventDisplayName;
+
+            private readonly List<string> allNames;
+            private readonly HashSet<string> lockedNames;
+            private readonly HashSet<string> selectedNames;
+            private readonly int optionalLimit;
+
+            private readonly Rectangle listBounds;
+            private readonly Rectangle confirmButtonBounds;
+            private readonly Rectangle backButtonBounds;
+            private readonly Rectangle cancelButtonBounds;
+            private readonly Rectangle upButtonBounds;
+            private readonly Rectangle downButtonBounds;
+
+            private readonly int rowHeight = 56;
+            private readonly int visibleRows = 6;
+            private int scrollIndex;
+
+            private string validationMessage = string.Empty;
+
+            public EventNpcSelectionMenu(
+                string npcDisplayName,
+                string eventDisplayName,
+                EventNpcSelectionInfo info,
+                IEnumerable<string> preselectedNames,
+                Action<List<string>> onConfirm,
+                Action onBack,
+                Action onCancel)
+                : base(Game1.uiViewport.Width / 2 - 380, Game1.uiViewport.Height / 2 - 290, 760, 580, showUpperRightCloseButton: false)
+            {
+                this.npcDisplayName = string.IsNullOrWhiteSpace(npcDisplayName) ? "NPC" : npcDisplayName;
+                this.eventDisplayName = string.IsNullOrWhiteSpace(eventDisplayName) ? "event" : eventDisplayName;
+                this.onConfirm = onConfirm ?? (_ => { });
+                this.onBack = onBack ?? (() => { });
+                this.onCancel = onCancel ?? (() => { });
+
+                allNames = info?.AllNames?.ToList() ?? new List<string>();
+                lockedNames = info?.LockedNames != null
+                    ? new HashSet<string>(info.LockedNames, StringComparer.OrdinalIgnoreCase)
+                    : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                selectedNames = new HashSet<string>(lockedNames, StringComparer.OrdinalIgnoreCase);
+                if (preselectedNames != null)
+                {
+                    foreach (string selectedName in preselectedNames)
+                    {
+                        if (allNames.Any(name => string.Equals(name, selectedName, StringComparison.OrdinalIgnoreCase)))
+                            selectedNames.Add(selectedName);
+                    }
+                }
+
+                optionalLimit = Math.Max(0, info?.OptionalLimit ?? 0);
+
+                listBounds = new Rectangle(xPositionOnScreen + 58, yPositionOnScreen + 180, width - 150, 360);
+                cancelButtonBounds = new Rectangle(xPositionOnScreen + 58, yPositionOnScreen + height - 82 + 60, 130, 52);
+                backButtonBounds = new Rectangle(xPositionOnScreen + width - 328, yPositionOnScreen + height - 82 + 60, 130, 52);
+                confirmButtonBounds = new Rectangle(xPositionOnScreen + width - 178, yPositionOnScreen + height - 82 + 60, 130, 52);
+                upButtonBounds = new Rectangle(listBounds.Right + 10, listBounds.Y, 30, 30);
+                downButtonBounds = new Rectangle(listBounds.Right + 10, listBounds.Bottom - 30, 30, 30);
+            }
+
+            public override void receiveScrollWheelAction(int direction)
+            {
+                if (direction > 0)
+                    scrollIndex = Math.Max(0, scrollIndex - 1);
+                else if (direction < 0)
+                    scrollIndex = Math.Min(Math.Max(0, allNames.Count - visibleRows), scrollIndex + 1);
+            }
+
+            public override void receiveLeftClick(int x, int y, bool playSound = true)
+            {
+                if (cancelButtonBounds.Contains(x, y))
+                {
+                    Game1.playSound("bigDeSelect");
+                    onCancel();
+                    return;
+                }
+
+                if (backButtonBounds.Contains(x, y))
+                {
+                    Game1.playSound("smallSelect");
+                    onBack();
+                    return;
+                }
+
+                if (confirmButtonBounds.Contains(x, y))
+                {
+                    TryConfirm();
+                    return;
+                }
+
+                if (upButtonBounds.Contains(x, y))
+                {
+                    scrollIndex = Math.Max(0, scrollIndex - 1);
+                    return;
+                }
+
+                if (downButtonBounds.Contains(x, y))
+                {
+                    scrollIndex = Math.Min(Math.Max(0, allNames.Count - visibleRows), scrollIndex + 1);
+                    return;
+                }
+
+                for (int row = 0; row < visibleRows; row++)
+                {
+                    int optionIndex = scrollIndex + row;
+                    if (optionIndex >= allNames.Count)
+                        break;
+
+                    Rectangle rowBounds = GetRowBounds(row);
+                    if (!rowBounds.Contains(x, y))
+                        continue;
+
+                    string name = allNames[optionIndex];
+                    ToggleSelection(name);
+                    return;
+                }
+            }
+
+            public override void receiveKeyPress(Keys key)
+            {
+                if (key == Keys.Escape)
+                {
+                    Game1.playSound("bigDeSelect");
+                    onCancel();
+                    return;
+                }
+
+                if (key == Keys.Enter)
+                {
+                    TryConfirm();
+                    return;
+                }
+
+                base.receiveKeyPress(key);
+            }
+
+            public override void draw(SpriteBatch b)
+            {
+                Game1.drawDialogueBox(xPositionOnScreen, yPositionOnScreen, width, height, false, true);
+
+                string title = $"Pick attendees for {eventDisplayName}";
+                Vector2 titleSize = Game1.dialogueFont.MeasureString(title);
+                Utility.drawTextWithShadow(
+                    b,
+                    title,
+                    Game1.dialogueFont,
+                    new Vector2(xPositionOnScreen + (width - titleSize.X) / 2f, yPositionOnScreen + 92f),
+                    Game1.textColor);
+
+                int optionalSelected = selectedNames.Count(name => !lockedNames.Contains(name));
+                Utility.drawTextWithShadow(
+                    b,
+                    $"Locked: main/required NPCs. Optional selected: {optionalSelected}/{optionalLimit}",
+                    Game1.smallFont,
+                    new Vector2(xPositionOnScreen + 58, yPositionOnScreen + 132),
+                    Game1.textColor);
+
+                IClickableMenu.drawTextureBox(
+                    b,
+                    Game1.menuTexture,
+                    new Rectangle(0, 256, 60, 60),
+                    listBounds.X,
+                    listBounds.Y,
+                    listBounds.Width,
+                    listBounds.Height,
+                    Color.White,
+                    1f,
+                    false);
+
+                for (int row = 0; row < visibleRows; row++)
+                {
+                    int optionIndex = scrollIndex + row;
+                    if (optionIndex >= allNames.Count)
+                        break;
+
+                    string name = allNames[optionIndex];
+                    bool isLocked = lockedNames.Contains(name);
+                    bool isSelected = selectedNames.Contains(name);
+                    Rectangle rowBounds = GetRowBounds(row);
+
+                    IClickableMenu.drawTextureBox(
+                        b,
+                        Game1.menuTexture,
+                        new Rectangle(0, 256, 60, 60),
+                        rowBounds.X,
+                        rowBounds.Y,
+                        rowBounds.Width,
+                        rowBounds.Height,
+                        isSelected ? new Color(220, 241, 220) : new Color(245, 245, 245),
+                        1f,
+                        false);
+
+                    string checkbox = isSelected ? "[X]" : "[ ]";
+                    string lockSuffix = isLocked ? " (locked)" : string.Empty;
+                    Utility.drawTextWithShadow(
+                        b,
+                        $"{checkbox} {name}{lockSuffix}",
+                        Game1.smallFont,
+                        new Vector2(rowBounds.X + 12, rowBounds.Y + 10),
+                        Game1.textColor);
+                }
+
+                if (allNames.Count > visibleRows)
+                {
+                    DrawSimpleButton(b, upButtonBounds, "^", new Color(232, 232, 232));
+                    DrawSimpleButton(b, downButtonBounds, "v", new Color(232, 232, 232));
+                }
+
+                DrawSimpleButton(b, cancelButtonBounds, "Cancel", new Color(242, 218, 218));
+                DrawSimpleButton(b, backButtonBounds, "Back", new Color(225, 225, 225));
+                DrawSimpleButton(b, confirmButtonBounds, "Confirm", new Color(196, 236, 196));
+
+                if (!string.IsNullOrWhiteSpace(validationMessage))
+                {
+                    Utility.drawTextWithShadow(
+                        b,
+                        validationMessage,
+                        Game1.smallFont,
+                        new Vector2(xPositionOnScreen + 58, yPositionOnScreen + height - 108),
+                        Color.IndianRed);
+                }
+
+                drawMouse(b);
+            }
+
+            private Rectangle GetRowBounds(int row)
+            {
+                return new Rectangle(
+                    listBounds.X + 8,
+                    listBounds.Y + 8 + (row * rowHeight),
+                    listBounds.Width - 16,
+                    rowHeight - 4);
+            }
+
+            private void ToggleSelection(string name)
+            {
+                if (lockedNames.Contains(name))
+                {
+                    Game1.playSound("cancel");
+                    validationMessage = $"{name} is required and cannot be removed.";
+                    return;
+                }
+
+                validationMessage = string.Empty;
+                if (selectedNames.Contains(name))
+                {
+                    selectedNames.Remove(name);
+                    Game1.playSound("drumkit6");
+                    return;
+                }
+
+                int optionalSelected = selectedNames.Count(selectedName => !lockedNames.Contains(selectedName));
+                if (optionalSelected >= optionalLimit)
+                {
+                    validationMessage = optionalLimit == 0
+                        ? "This location has no open attendee slots."
+                        : $"You can add up to {optionalLimit} optional NPC(s).";
+                    Game1.playSound("cancel");
+                    return;
+                }
+
+                selectedNames.Add(name);
+                Game1.playSound("smallSelect");
+            }
+
+            private void TryConfirm()
+            {
+                List<string> result = allNames.Where(name => selectedNames.Contains(name)).ToList();
+                if (lockedNames.Any(lockedName => !selectedNames.Contains(lockedName)))
+                {
+                    validationMessage = "Main and required NPCs must remain selected.";
+                    Game1.playSound("cancel");
+                    return;
+                }
+
+                Game1.playSound("smallSelect");
+                onConfirm(result);
+            }
+        }
+
+        private static void DrawSimpleButton(SpriteBatch b, Rectangle bounds, string text, Color boxColor)
+        {
+            IClickableMenu.drawTextureBox(
+                b,
+                Game1.menuTexture,
+                new Rectangle(0, 256, 60, 60),
+                bounds.X,
+                bounds.Y,
+                bounds.Width,
+                bounds.Height,
+                boxColor,
+                1f,
+                false);
+
+            Vector2 textSize = Game1.smallFont.MeasureString(text);
+            Vector2 textPosition = new Vector2(
+                bounds.X + (bounds.Width - textSize.X) / 2f,
+                bounds.Y + (bounds.Height - textSize.Y) / 2f + 2f);
+
+            Utility.drawTextWithShadow(b, text, Game1.smallFont, textPosition, Game1.textColor);
+        }
+
+        private static bool RequiresLocationAndNpcSelection(string eventType)
+        {
+            return string.Equals(eventType, "Birthday", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(eventType, "Picnic", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(eventType, "Campfire", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static void OpenTimeSelectionMenu(
+            string eventNpcName,
+            string npcDisplayName,
+            string eventType,
+            string? npcResponseTemplate,
+            string? prefilledTime,
+            string? preselectedLocation,
+            List<string>? preselectedNpcNames)
+        {
+            bool needsExtraSelection = RequiresLocationAndNpcSelection(eventType);
+            Game1.activeClickableMenu = new EventTimeEntryMenu(
+                npcDisplayName,
+                eventType,
+                onConfirm: normalizedEventTime =>
+                {
+                    if (!needsExtraSelection)
+                    {
+                        TryFinalizeSchedule(eventNpcName, npcDisplayName, eventType, npcResponseTemplate, normalizedEventTime, null, null);
+                        return;
+                    }
+
+                    OpenLocationSelectionMenu(
+                        eventNpcName,
+                        npcDisplayName,
+                        eventType,
+                        npcResponseTemplate,
+                        normalizedEventTime,
+                        preselectedLocation,
+                        preselectedNpcNames);
+                },
+                onCancel: () =>
+                {
+                    Game1.activeClickableMenu = null;
+                },
+                initialTimeText: prefilledTime,
+                primaryActionLabel: needsExtraSelection ? "Next" : "Confirm");
+        }
+
+        private static void OpenLocationSelectionMenu(
+            string eventNpcName,
+            string npcDisplayName,
+            string eventType,
+            string? npcResponseTemplate,
+            string normalizedEventTime,
+            string? preselectedLocation,
+            List<string>? preselectedNpcNames)
+        {
+            if (!TryGetEventLocationOptions(eventType, eventNpcName, out List<EventLocationOption> locationOptions))
+            {
+                Game1.playSound("cancel");
+                Game1.addHUDMessage(new HUDMessage("No valid location is available for this event.", 3));
+                Game1.activeClickableMenu = null;
+                return;
+            }
+
+            Game1.activeClickableMenu = new EventLocationSelectionMenu(
+                npcDisplayName,
+                eventType,
+                locationOptions,
+                preselectedLocation,
+                onNext: selectedLocation =>
+                {
+                    OpenNpcSelectionMenu(
+                        eventNpcName,
+                        npcDisplayName,
+                        eventType,
+                        npcResponseTemplate,
+                        normalizedEventTime,
+                        selectedLocation,
+                        preselectedNpcNames);
+                },
+                onBack: () =>
+                {
+                    OpenTimeSelectionMenu(
+                        eventNpcName,
+                        npcDisplayName,
+                        eventType,
+                        npcResponseTemplate,
+                        normalizedEventTime,
+                        preselectedLocation,
+                        preselectedNpcNames);
+                },
+                onCancel: () =>
+                {
+                    Game1.activeClickableMenu = null;
+                });
+        }
+
+        private static void OpenNpcSelectionMenu(
+            string eventNpcName,
+            string npcDisplayName,
+            string eventType,
+            string? npcResponseTemplate,
+            string normalizedEventTime,
+            string selectedLocation,
+            List<string>? preselectedNpcNames)
+        {
+            EventNpcSelectionInfo info = BuildNpcSelectionInfo(eventNpcName, eventType, selectedLocation);
+            Game1.activeClickableMenu = new EventNpcSelectionMenu(
+                npcDisplayName,
+                eventType,
+                info,
+                preselectedNpcNames ?? info.LockedNames.ToList(),
+                onConfirm: selectedNpcNames =>
+                {
+                    TryFinalizeSchedule(
+                        eventNpcName,
+                        npcDisplayName,
+                        eventType,
+                        npcResponseTemplate,
+                        normalizedEventTime,
+                        selectedLocation,
+                        selectedNpcNames);
+                },
+                onBack: () =>
+                {
+                    OpenLocationSelectionMenu(
+                        eventNpcName,
+                        npcDisplayName,
+                        eventType,
+                        npcResponseTemplate,
+                        normalizedEventTime,
+                        selectedLocation,
+                        preselectedNpcNames ?? info.LockedNames.ToList());
+                },
+                onCancel: () =>
+                {
+                    Game1.activeClickableMenu = null;
+                });
+        }
+
+        private static bool TryGetEventLocationOptions(string eventType, string eventNpcName, out List<EventLocationOption> options)
+        {
+            options = new List<EventLocationOption>();
+            if (string.Equals(eventType, "Birthday", StringComparison.OrdinalIgnoreCase))
+            {
+                HashSet<string> allowedBirthdayKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                NPC? eventNpc = Game1.getCharacterFromName(eventNpcName);
+                if (!string.IsNullOrWhiteSpace(eventNpc?.DefaultMap) && birthdayMap.TryGetValue(eventNpc.DefaultMap, out _))
+                    allowedBirthdayKeys.Add(eventNpc.DefaultMap);
+
+                if (birthdayMap.TryGetValue("Saloon", out _))
+                    allowedBirthdayKeys.Add("Saloon");
+
+                if (Game1.MasterPlayer.hasCompletedCommunityCenter() && birthdayMap.TryGetValue("CommunityCenter", out _))
+                    allowedBirthdayKeys.Add("CommunityCenter");
+
+                foreach (string key in allowedBirthdayKeys)
+                {
+                    BirthdayMapData data = birthdayMap[key];
+                    if (data is null || string.IsNullOrWhiteSpace(data.event_map))
+                        continue;
+
+                    if (Game1.getLocationFromName(data.event_map) == null)
+                        continue;
+
+                    options.Add(new EventLocationOption
+                    {
+                        Key = key,
+                        DisplayName = Game1.getLocationFromName(data.event_map)?.DisplayName ?? data.event_map,
+                        MaxParticipants = data.npc_tiles?.Count ?? 0,
+                        RequiredNpcNames = data.required_npc?.Where(name => !string.IsNullOrWhiteSpace(name)).Distinct(StringComparer.OrdinalIgnoreCase).ToList() ?? new List<string>()
+                    });
+                }
+            }
+            else if (string.Equals(eventType, "Picnic", StringComparison.OrdinalIgnoreCase))
+            {
+                foreach ((string key, PicnicMapData data) in picnicMap)
+                {
+                    if (data is null || Game1.getLocationFromName(key) == null)
+                        continue;
+
+                    options.Add(new EventLocationOption
+                    {
+                        Key = key,
+                        DisplayName = Game1.getLocationFromName(key)?.DisplayName ?? key,
+                        MaxParticipants = data.npc_tile != null ? 1 : 0
+                    });
+                }
+            }
+            else if (string.Equals(eventType, "Campfire", StringComparison.OrdinalIgnoreCase))
+            {
+                foreach ((string key, CampfireMapData data) in campfireMap)
+                {
+                    if (data is null || Game1.getLocationFromName(key) == null)
+                        continue;
+
+                    options.Add(new EventLocationOption
+                    {
+                        Key = key,
+                        DisplayName = Game1.getLocationFromName(key)?.DisplayName ?? key,
+                        MaxParticipants = data.npc_tiles?.Count ?? 0
+                    });
+                }
+            }
+
+            options = options.OrderBy(option => option.DisplayName, StringComparer.OrdinalIgnoreCase).ToList();
+            return options.Count > 0;
+        }
+
+        private static EventNpcSelectionInfo BuildNpcSelectionInfo(string eventNpcName, string eventType, string selectedLocation)
+        {
+            EventNpcSelectionInfo info = new EventNpcSelectionInfo();
+            List<string> lockedNames = GetDefaultLockedNpcNames(eventNpcName, eventType, selectedLocation);
+            foreach (string lockedName in lockedNames)
+                info.LockedNames.Add(lockedName);
+
+            int maxParticipants = 0;
+            if (string.Equals(eventType, "Birthday", StringComparison.OrdinalIgnoreCase) && birthdayMap.TryGetValue(selectedLocation, out BirthdayMapData? birthdayData))
+                maxParticipants = birthdayData?.npc_tiles?.Count ?? 0;
+            else if (string.Equals(eventType, "Campfire", StringComparison.OrdinalIgnoreCase) && campfireMap.TryGetValue(selectedLocation, out CampfireMapData? campfireData))
+                maxParticipants = campfireData?.npc_tiles?.Count ?? 0;
+            else if (string.Equals(eventType, "Picnic", StringComparison.OrdinalIgnoreCase) && picnicMap.TryGetValue(selectedLocation, out PicnicMapData? picnicData))
+                maxParticipants = picnicData?.npc_tile != null ? 1 : 0;
+
+            int lockedForCapacity = lockedNames.Count;
+            if (string.Equals(eventType, "Birthday", StringComparison.OrdinalIgnoreCase) && lockedNames.Any(name => string.Equals(name, eventNpcName, StringComparison.OrdinalIgnoreCase)))
+                lockedForCapacity -= 1;
+
+            info.OptionalLimit = Math.Max(0, maxParticipants - Math.Max(0, lockedForCapacity));
+
+            List<string> lockedOrdered = lockedNames
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            List<string> optionalOrdered = GetSelectableNpcPool()
+                .Where(candidate => !lockedNames.Any(name => string.Equals(name, candidate, StringComparison.OrdinalIgnoreCase)))
+                .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            info.AllNames = lockedOrdered.Concat(optionalOrdered).ToList();
+            return info;
+        }
+
+        private static List<string> GetDefaultLockedNpcNames(string eventNpcName, string eventType, string selectedLocation)
+        {
+            List<string> lockedNames = new List<string>();
+            if (!string.IsNullOrWhiteSpace(eventNpcName))
+                lockedNames.Add(eventNpcName.Trim());
+
+            if (string.Equals(eventType, "Birthday", StringComparison.OrdinalIgnoreCase)
+                && birthdayMap.TryGetValue(selectedLocation, out BirthdayMapData? birthdayData)
+                && birthdayData?.required_npc != null)
+            {
+                foreach (string requiredName in birthdayData.required_npc)
+                {
+                    if (!string.IsNullOrWhiteSpace(requiredName))
+                        lockedNames.Add(requiredName.Trim());
+                }
+            }
+
+            return lockedNames
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        private static List<string> GetSelectableNpcPool()
+        {
+            return Utility.getAllVillagers()
+                .Where(npc => npc != null
+                    && !socialNpcBlacklist.Contains(npc.Name)
+                    && !npc.IsInvisible
+                    && npc.CanSocialize
+                    && Game1.player.friendshipData.TryGetValue(npc.Name, out Friendship? friendship)
+                    && friendship.Points >= 250)
+                .Select(npc => npc.Name)
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        private static void TryFinalizeSchedule(
+            string eventNpcName,
+            string npcDisplayName,
+            string eventType,
+            string? npcResponseTemplate,
+            string normalizedEventTime,
+            string? selectedLocation,
+            List<string>? selectedNpcNames)
+        {
+            bool isNewSchedule = TryAddPendingUnlimitedEvent(
+                eventNpcName,
+                eventType,
+                normalizedEventTime,
+                selectedLocation,
+                selectedNpcNames);
+
+            Game1.activeClickableMenu = null;
+            if (!isNewSchedule)
+            {
+                Game1.addHUDMessage(new HUDMessage(TimeSlotUnavailableMessage, 3));
+                return;
+            }
+
+            string displayTime = FormatEventTimeForDisplay(normalizedEventTime);
+            string locationLabel = string.IsNullOrWhiteSpace(selectedLocation)
+                ? string.Empty
+                : $" at {(Game1.getLocationFromName(selectedLocation)?.DisplayName ?? selectedLocation)}";
+            string feedback = $"Scheduled {eventType} with {npcDisplayName} at {displayTime}{locationLabel}.";
+
+            if (!string.IsNullOrWhiteSpace(npcResponseTemplate))
+                iSmartPhoneApi.SendSmartphoneMessageFromNPC(eventNpcName, npcResponseTemplate);
+
+            iSmartPhoneApi.SendSmartphoneNotification(feedback, "Unlimited Events Expansion");
+        }
 
         public static void TryOpenScheduleEventTimeMenu(
         string eventNpcName,
@@ -487,10 +1397,10 @@ namespace UnlimitedEventExpansion
                 return;
             }
 
-            if (string.IsNullOrWhiteSpace(Config.Key) && TotalEventRegisteredToday >= 2)
+            if (string.IsNullOrWhiteSpace(Config.Key) && TotalEventRegisteredToday >= ModEntry.DailyEventLimit)
             {
                 Game1.playSound("cancel");
-                iSmartPhoneApi.SendSmartphoneNotification("You can only schedule two events per day without your own API key. Check out the mod page for more instructions!", "Unlimited Events Expansion");
+                iSmartPhoneApi.SendSmartphoneNotification($"You can only schedule {ModEntry.DailyEventLimit} events per day without your own API key. Check out the mod page for more instructions!", "Unlimited Events Expansion");
                 return;
             }
 
@@ -502,51 +1412,48 @@ namespace UnlimitedEventExpansion
             }
 
             string npcDisplayName = eventNpc.displayName;
-            Game1.activeClickableMenu = new EventTimeEntryMenu(
-                npcDisplayName,
-                eventType,
-                onConfirm: normalizedEventTime =>
-                {
-                    bool isNewSchedule = TryAddPendingUnlimitedEvent(eventNpcName, eventType, normalizedEventTime);
-
-                    Game1.activeClickableMenu = null;
-
-                    if (!isNewSchedule)
-                    {
-                        Game1.addHUDMessage(new HUDMessage(TimeSlotUnavailableMessage, 3));
-                        return;
-                    }
-                
-                    string displayTime = FormatEventTimeForDisplay(normalizedEventTime);
-                        string feedback = $"Scheduled {eventType} with {npcDisplayName} at {displayTime}.";
-
-                    if (!string.IsNullOrWhiteSpace(npcResponseTemplate))
-                    {
-                        iSmartPhoneApi.SendSmartphoneMessageFromNPC(eventNpcName, npcResponseTemplate);
-                        iSmartPhoneApi.SendSmartphoneNotification(feedback, "Unlimited Events Expansion");
-                    }
-                    else
-                    {
-                        iSmartPhoneApi.SendSmartphoneNotification(feedback, "Unlimited Events Expansion");
-                    }
-                },
-                onCancel: () =>
-                {
-                    Game1.activeClickableMenu = null;
-                });
+            OpenTimeSelectionMenu(eventNpcName, npcDisplayName, eventType, npcResponseTemplate, null, null, null);
         }
 
-        private static bool TryAddPendingUnlimitedEvent(string npcName, string eventType, string normalizedEventTime)
+        private static bool TryAddPendingUnlimitedEvent(
+            string npcName,
+            string eventType,
+            string normalizedEventTime,
+            string? selectedLocation,
+            List<string>? selectedParticipants)
         {
             string normalizedScheduledTime = normalizedEventTime.Trim();
             if (IsEventTimeAlreadyScheduled(normalizedScheduledTime))
                 return false;
 
-            var pendingEvent = (npcName.Trim(), eventType.Trim(), normalizedScheduledTime);
-            if (PendingUnlimitedEvents.Contains(pendingEvent))
+            string normalizedNpcName = npcName.Trim();
+            string normalizedEventType = eventType.Trim();
+            string? normalizedLocation = string.IsNullOrWhiteSpace(selectedLocation) ? null : selectedLocation.Trim();
+            List<string> normalizedParticipants = (selectedParticipants ?? new List<string>())
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Select(name => name.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            bool alreadyExists = PendingUnlimitedEvents.Any(existing =>
+                string.Equals(existing.NpcName, normalizedNpcName, StringComparison.Ordinal)
+                && string.Equals(existing.EventType, normalizedEventType, StringComparison.Ordinal)
+                && string.Equals(existing.TimeOfDay, normalizedScheduledTime, StringComparison.Ordinal)
+                && string.Equals(existing.LocationName ?? string.Empty, normalizedLocation ?? string.Empty, StringComparison.Ordinal)
+                && existing.ParticipantNames.SequenceEqual(normalizedParticipants));
+
+            if (alreadyExists)
                 return false;
 
-            PendingUnlimitedEvents.Add(pendingEvent);
+            PendingUnlimitedEvents.Add(new ScheduledUnlimitedEvent
+            {
+                NpcName = normalizedNpcName,
+                EventType = normalizedEventType,
+                TimeOfDay = normalizedScheduledTime,
+                LocationName = normalizedLocation,
+                ParticipantNames = normalizedParticipants
+            });
             TotalEventRegisteredToday++;
             return true;
         }
